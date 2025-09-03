@@ -1,0 +1,125 @@
+import 'package:e_learning_it/login_page.dart';
+import 'package:flutter/material.dart';
+import 'package:e_learning_it/student_outsiders/main_page.dart';
+import 'package:e_learning_it/login_page.dart';
+
+class DrawerPage extends StatelessWidget {
+  final String userName;
+  final String userId;
+
+  const DrawerPage({super.key, required this.userName, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      backgroundColor: const Color(0xFF2F3337),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          iconTheme: const IconThemeData(color: Colors.white),
+          textTheme: Theme.of(context).textTheme.copyWith(
+            bodyLarge: const TextStyle(color: Colors.white),
+            bodyMedium: const TextStyle(color: Colors.white),
+            titleMedium: const TextStyle(color: Colors.white),
+          ),
+        ),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            // ส่วน DrawerHeader ที่แก้ไข
+            SizedBox(
+              height: 100,
+              child: DrawerHeader(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2F3337),
+                ),
+                child: Stack(
+                  children: <Widget>[
+                    
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Image.asset(
+                        'assets/images/logo2not.png', // เปลี่ยนชื่อไฟล์และ path ให้ถูกต้อง
+                        fit: BoxFit.contain,
+                        height: 100, // ปรับขนาดรูปภาพตามที่ต้องการ
+                      ),
+                    ),
+                    // ปุ่มปิด Drawer
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        onPressed: () {
+                          Navigator.of(context).pop(); // คำสั่งสำหรับปิด Drawer
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('หน้าหลัก'),
+              iconColor: Colors.white,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => MainPage(userName: userName, userId: userId)),
+                );
+              },
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.book),
+              title: const Text('หลักสูตร'),
+              collapsedIconColor: Colors.white,
+              iconColor: const Color(0xFF03A96B),
+              collapsedTextColor: Colors.white,
+              textColor: const Color(0xFF03A96B),
+              children: <Widget>[
+                ListTile(
+                  title: const Text('หลักสูตรที่ 1'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // TODO: Implement navigation to Course 1 page
+                  },
+                ),
+                ListTile(
+                  title: const Text('หลักสูตรที่ 2'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // TODO: Implement navigation to Course 2 page
+                  },
+                ),
+                ListTile(
+                  title: const Text('หลักสูตรที่ 3'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // TODO: Implement navigation to Course 3 page
+                  },
+                ),
+              ],
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat),
+              title: const Text('คำถาม'),
+              iconColor: Colors.white,
+              onTap: () {
+                // TODO: Implement navigation to the chat page
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info),
+              title: const Text('เกี่ยวกับเรา'),
+              iconColor: Colors.white,
+              onTap: () {
+                // TODO: Implement navigation to the about us page
+              },
+            ),
+           
+          ],
+        ),
+      ),
+    );
+  }
+}
