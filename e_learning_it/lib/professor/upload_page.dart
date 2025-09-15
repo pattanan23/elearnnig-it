@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:e_learning_it/professor/drawer_processor.dart';
 import 'package:e_learning_it/professor/navbar_professor.dart';
+import 'package:e_learning_it/error_dialog_page.dart'; // เพิ่ม import สำหรับ ErrorDialogPage
 
 class UploadCoursePage extends StatefulWidget {
   final String userName;
@@ -25,8 +25,6 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
   final _shortDescriptionController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _objectiveController = TextEditingController();
-  // คุณสามารถลบ _courseContentController ออกได้หากไม่จำเป็นต้องใช้
-  // final _courseContentController = TextEditingController();
 
   PlatformFile? _selectedImagePlatformFile;
   PlatformFile? _selectedVideoPlatformFile;
@@ -42,7 +40,6 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
     _shortDescriptionController.dispose();
     _descriptionController.dispose();
     _objectiveController.dispose();
-    // _courseContentController.dispose();
     super.dispose();
   }
 
@@ -83,12 +80,21 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
     }
   }
 
+  // ฟังก์ชันสำหรับแสดง ErrorDialog
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return ErrorDialogPage(message: message);
+      },
+    );
+  }
+
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedImagePlatformFile == null && _selectedVideoPlatformFile == null && _selectedPdfPlatformFile == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('กรุณาเลือกไฟล์รูปภาพ วิดีโอ หรือ PDF อย่างน้อย 1 ไฟล์')),
-        );
+        // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog
+        _showErrorDialog('กรุณาเลือกไฟล์รูปภาพ วิดีโอ หรือ PDF อย่างน้อย 1 ไฟล์');
         return;
       }
 
@@ -102,7 +108,6 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
       var uri = Uri.parse('http://localhost:3006/api/courses');
       var request = http.MultipartRequest('POST', uri);
       
-      // ส่งข้อมูล text fields ทั้งหมด
       request.fields['course_code'] = _courseCodeController.text;
       request.fields['course_name'] = _courseNameController.text;
       request.fields['short_description'] = _shortDescriptionController.text;
@@ -110,18 +115,16 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
       request.fields['objective'] = _objectiveController.text;
       request.fields['user_id'] = userId;
       
-      // ส่วนสำคัญ: ตรวจสอบและส่งไฟล์โดยใช้ชื่อ field ที่ตรงกับ Multer
-      // Multer Error: Unexpected field มักจะเกิดจากการที่ชื่อ field ไม่ตรงกัน
       if (_selectedImagePlatformFile != null) {
         if (kIsWeb) {
           request.files.add(http.MultipartFile.fromBytes(
-            'name_image', // เปลี่ยนชื่อ field ให้ตรงกับ name_image
+            'name_image',
             _selectedImagePlatformFile!.bytes!,
             filename: _selectedImagePlatformFile!.name,
           ));
         } else {
           request.files.add(await http.MultipartFile.fromPath(
-            'name_image', // เปลี่ยนชื่อ field ให้ตรงกับ name_image
+            'name_image',
             _selectedImagePlatformFile!.path!,
             filename: _selectedImagePlatformFile!.name,
           ));
@@ -131,13 +134,13 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
       if (_selectedVideoPlatformFile != null) {
         if (kIsWeb) {
           request.files.add(http.MultipartFile.fromBytes(
-            'name_vdo', // เปลี่ยนชื่อ field ให้ตรงกับ name_vdo
+            'name_vdo',
             _selectedVideoPlatformFile!.bytes!,
             filename: _selectedVideoPlatformFile!.name,
           ));
         } else {
           request.files.add(await http.MultipartFile.fromPath(
-            'name_vdo', // เปลี่ยนชื่อ field ให้ตรงกับ name_vdo
+            'name_vdo',
             _selectedVideoPlatformFile!.path!,
             filename: _selectedVideoPlatformFile!.name,
           ));
@@ -147,13 +150,13 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
       if (_selectedPdfPlatformFile != null) {
         if (kIsWeb) {
           request.files.add(http.MultipartFile.fromBytes(
-            'name_file', // เปลี่ยนชื่อ field ให้ตรงกับ name_file
+            'name_file',
             _selectedPdfPlatformFile!.bytes!,
             filename: _selectedPdfPlatformFile!.name,
           ));
         } else {
           request.files.add(await http.MultipartFile.fromPath(
-            'name_file', // เปลี่ยนชื่อ field ให้ตรงกับ name_file
+            'name_file',
             _selectedPdfPlatformFile!.path!,
             filename: _selectedPdfPlatformFile!.name,
           ));
@@ -180,40 +183,54 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
         final responseBody = await response.stream.bytesToString();
 
         if (response.statusCode == 201) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ส่งข้อมูลและอัปโหลดไฟล์สำเร็จ!')),
-          );
-          _courseCodeController.clear();
-          _courseNameController.clear();
-          _shortDescriptionController.clear();
-          _descriptionController.clear();
-          _objectiveController.clear();
-          // _courseContentController.clear();
-          setState(() {
-            _selectedImagePlatformFile = null;
-            _selectedVideoPlatformFile = null;
-            _selectedPdfPlatformFile = null;
-          });
-          
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UploadCoursePage(
-                userName: widget.userName,
-                userId: widget.userId,
+          // ใช้ Dialog แทน ScaffoldMessenger สำหรับการแจ้งเตือนสำเร็จ
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('สำเร็จ'),
+                content: const Text('ส่งข้อมูลและอัปโหลดไฟล์สำเร็จ!'),
+                actions: <Widget>[
+                  TextButton(
+                    child: const Text('ตกลง'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              );
+            },
+          ).then((_) {
+            // ทำการ clear ข้อมูลและ navigate หลังจาก Dialog ถูกปิด
+            _courseCodeController.clear();
+            _courseNameController.clear();
+            _shortDescriptionController.clear();
+            _descriptionController.clear();
+            _objectiveController.clear();
+            setState(() {
+              _selectedImagePlatformFile = null;
+              _selectedVideoPlatformFile = null;
+              _selectedPdfPlatformFile = null;
+            });
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UploadCoursePage(
+                  userName: widget.userName,
+                  userId: widget.userId,
+                ),
               ),
-            ),
-          );
+            );
+          });
 
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('ส่งข้อมูลล้มเหลว: ${response.statusCode} - $responseBody')),
-          );
+          // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog สำหรับการแจ้งเตือนข้อผิดพลาด
+          _showErrorDialog('ส่งข้อมูลล้มเหลว: ${response.statusCode} - $responseBody');
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาดในการส่งข้อมูล: $e')),
-        );
+        // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog สำหรับการแจ้งเตือนข้อผิดพลาด
+        _showErrorDialog('เกิดข้อผิดพลาดในการส่งข้อมูล: $e');
       } finally {
         setState(() {
           _isSubmitting = false;
@@ -226,8 +243,8 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-       appBar: NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
-       drawer: DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
+      appBar: NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
+      drawer: DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
       body: SingleChildScrollView(
         child: Container(
           padding: const EdgeInsets.all(32.0),
@@ -267,45 +284,37 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                 ),
                 const SizedBox(height: 32),
                 _buildTextField(
-                    controller: _courseCodeController,
-                    label: 'รหัสวิชา', // เปลี่ยน Label
-                    validator: (value) => value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
+                  controller: _courseCodeController,
+                  label: 'รหัสวิชา',
+                  validator: (value) => value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _courseNameController,
-                  label: 'หัวข้อเรื่อง', // เปลี่ยน Label
+                  label: 'หัวข้อเรื่อง',
                   validator: (value) => value!.isEmpty ? 'กรุณาใส่หัวข้อเรื่อง' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _shortDescriptionController,
-                  label: 'รายละเอียด (สั้นๆ)', // เปลี่ยน Label
+                  label: 'รายละเอียด (สั้นๆ)',
                   maxLines: 3,
                   validator: (value) => value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _descriptionController,
-                  label: 'คำอธิบายหลักสูตร', // เปลี่ยน Label
+                  label: 'คำอธิบายหลักสูตร',
                   maxLines: 3,
                   validator: (value) => value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _objectiveController,
-                  label: 'วัตถุประสงค์', // เปลี่ยน Label
+                  label: 'วัตถุประสงค์',
                   maxLines: 3,
                   validator: (value) => value!.isEmpty ? 'กรุณาใส่วัตถุประสงค์' : null,
                 ),
-                // คุณสามารถลบส่วนนี้ออกได้หากไม่จำเป็น
-                // const SizedBox(height: 16),
-                // _buildTextField(
-                //   controller: _courseContentController,
-                //   label: 'ระเบียบเนื้อหา',
-                //   maxLines: 5,
-                //   validator: (value) => value!.isEmpty ? 'กรุณาใส่ระเบียบเนื้อหา' : null,
-                // ),
                 const SizedBox(height: 24),
                 _buildFilePicker(
                   label: 'อัปโหลดรูปภาพ',

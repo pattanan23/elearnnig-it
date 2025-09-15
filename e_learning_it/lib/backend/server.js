@@ -312,6 +312,66 @@ app.get('/api/show_courses', async (req, res) => {
     }
 });
 
+// Endpoint สำหรับดึงรายละเอียดหลักสูตรตาม ID
+app.get('/api/course/:courseId', async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        const query = `
+            SELECT 
+                c.course_id,
+                c.course_code,
+                c.course_name,
+                c.short_description,
+                c.description,      -- ดึง field description
+                c.objective,        -- ดึง field objective
+                c.name_image,
+                c.name_file,
+                c.name_vdo,
+                c.user_id,
+                u.first_name,
+                u.last_name
+            FROM courses c
+            JOIN users u ON c.user_id = u.user_id
+            WHERE c.course_id = $1;
+        `;
+        const result = await pool.query(query, [courseId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        const courseData = result.rows[0];
+
+        // แปลง JSON string เป็น Array และจัดการค่าว่าง
+        const imageNames = courseData.name_image ? JSON.parse(courseData.name_image) : [];
+        const fileNames = courseData.name_file ? JSON.parse(courseData.name_file) : [];
+        const videoNames = courseData.name_vdo ? JSON.parse(courseData.name_vdo) : [];
+
+        // สร้าง URL ของรูปภาพ
+        const imageUrl = imageNames.length > 0
+            ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/image/${imageNames[0]}`
+            : 'https://placehold.co/600x400.png';
+
+        res.json({
+            course_id: courseData.course_id,
+            course_code: courseData.course_code,
+            course_name: courseData.course_name,
+            short_description: courseData.short_description,
+            description: courseData.description || '', // ส่งค่าว่างถ้าเป็น null
+            objective: courseData.objective || '',     // ส่งค่าว่างถ้าเป็น null
+            professor_name: `${courseData.first_name} ${courseData.last_name}`,
+            image_url: imageUrl,
+            file_names: fileNames, // ส่งแค่ชื่อไฟล์
+            video_names: videoNames, // ส่งแค่ชื่อไฟล์
+            user_id: courseData.user_id, // เพิ่ม user_id
+        });
+
+    } catch (error) {
+        console.error('Error fetching course details:', error);
+        res.status(500).json({ error: 'Database query failed' });
+    }
+});
+
 // เริ่มต้นเซิร์ฟเวอร์
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);

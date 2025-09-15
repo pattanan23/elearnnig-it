@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:e_learning_it/professor/course_model.dart';
 import 'dart:math';
+import 'package:e_learning_it/professor/course_professor_detail.dart';
 
 class MainProfessorPage extends StatelessWidget {
   final String userName;
@@ -110,39 +111,54 @@ class MainProfessorPage extends StatelessWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
+              // แก้ไขส่วนนี้
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final int crossAxisCount = constraints.maxWidth > 600 ? 3 : 2;
-                  return FutureBuilder<List<Course>>(
-                    future: fetchRecommendedCourses(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      } else if (snapshot.hasError) {
-                        return Center(child: Text('Error: ${snapshot.error}'));
-                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Center(child: Text('ไม่พบข้อมูลหลักสูตร'));
-                      } else {
-                        return GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.65, // ปรับค่าเพื่อให้มีพื้นที่น้อยลง
-                          ),
-                          itemCount: min(snapshot.data!.length, 3), // จำกัดจำนวนคอร์สที่แสดง
-                          itemBuilder: (context, index) {
-                            final course = snapshot.data![index];
-                            return _buildCourseCard(context, course);
-                          },
-                        );
-                      }
-                    },
+                  final int crossAxisCount = constraints.maxWidth > 800
+                      ? 3
+                      : constraints.maxWidth > 500
+                          ? 2
+                          : 1;
+
+                  final double maxCardWidth = 400;
+                  final double gridWidth = min(constraints.maxWidth, maxCardWidth * crossAxisCount);
+
+                  return Center(
+                    child: SizedBox(
+                      width: gridWidth,
+                      child: FutureBuilder<List<Course>>(
+                        future: fetchRecommendedCourses(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          } else if (snapshot.hasError) {
+                            return Center(child: Text('Error: ${snapshot.error}'));
+                          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                            return const Center(child: Text('ไม่พบข้อมูลหลักสูตร'));
+                          } else {
+                            return GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                crossAxisSpacing: 16, // เพิ่มระยะห่าง
+                                mainAxisSpacing: 16, // เพิ่มระยะห่าง
+                                childAspectRatio: 0.75, // ปรับค่าเพื่อให้มีพื้นที่มากขึ้นสำหรับเนื้อหา
+                              ),
+                              itemCount: min(snapshot.data!.length, 3),
+                              itemBuilder: (context, index) {
+                                final course = snapshot.data![index];
+                                return _buildCourseCard(context, course);
+                              },
+                            );
+                          }
+                        },
+                      ),
+                    ),
                   );
                 },
               ),
+              // สิ้นสุดการแก้ไข
             ],
           ),
         ),
@@ -150,8 +166,21 @@ class MainProfessorPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCourseCard(BuildContext context, Course course) {
-    return Container(
+Widget _buildCourseCard(BuildContext context, Course course) {
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CourseDetailPage(
+            course: course,
+            userName: userName,
+            userId: userId,
+          ),
+        ),
+      );
+    },
+    child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
@@ -168,14 +197,15 @@ class MainProfessorPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 150, // เพิ่มความสูงของรูปภาพเพื่อให้พื้นที่ว่างน้อยลง
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: NetworkImage(course.imageUrl),
-                fit: BoxFit.cover,
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: NetworkImage(course.imageUrl),
+                  fit: BoxFit.cover,
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
             ),
           ),
           Padding(
@@ -185,15 +215,16 @@ class MainProfessorPage extends StatelessWidget {
               children: [
                 _buildCourseInfoRow('รหัสวิชา:', course.courseCode.toString()),
                 _buildCourseInfoRow('ชื่อวิชา:', course.courseName),
-                _buildCourseInfoRow('รายละเอียด:', course.shortDescription.toString(), maxLines: 2), // จำกัดจำนวนบรรทัด
+                _buildCourseInfoRow('รายละเอียด:', course.shortDescription.toString(), maxLines: 2),
                 _buildCourseInfoRow('อาจารย์ผู้สอน:', course.professorName),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCourseInfoRow(String label, String value, {int? maxLines}) {
     return Padding(
