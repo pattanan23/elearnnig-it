@@ -1,7 +1,9 @@
-import 'package:e_learning_it/login_page.dart';
+import 'package:e_learning_it/student_outsiders/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:e_learning_it/student_outsiders/main_page.dart';
-import 'package:e_learning_it/login_page.dart';
+import 'package:e_learning_it/student_outsiders/course/new_course_page.dart';
+import 'package:e_learning_it/student_outsiders/course/all_course_page.dart';
+import 'package:e_learning_it/student_outsiders/about_page.dart';
 
 class DrawerPage extends StatelessWidget {
   final String userName;
@@ -17,10 +19,10 @@ class DrawerPage extends StatelessWidget {
         data: Theme.of(context).copyWith(
           iconTheme: const IconThemeData(color: Colors.white),
           textTheme: Theme.of(context).textTheme.copyWith(
-            bodyLarge: const TextStyle(color: Colors.white),
-            bodyMedium: const TextStyle(color: Colors.white),
-            titleMedium: const TextStyle(color: Colors.white),
-          ),
+                bodyLarge: const TextStyle(color: Colors.white),
+                bodyMedium: const TextStyle(color: Colors.white),
+                titleMedium: const TextStyle(color: Colors.white),
+              ),
         ),
         child: ListView(
           padding: EdgeInsets.zero,
@@ -34,7 +36,6 @@ class DrawerPage extends StatelessWidget {
                 ),
                 child: Stack(
                   children: <Widget>[
-                    
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Image.asset(
@@ -65,7 +66,9 @@ class DrawerPage extends StatelessWidget {
                 Navigator.pop(context);
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => MainPage(userName: userName, userId: userId)),
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          MainPage(userName: userName, userId: userId)),
                 );
               },
             ),
@@ -77,25 +80,28 @@ class DrawerPage extends StatelessWidget {
               collapsedTextColor: Colors.white,
               textColor: const Color(0xFF03A96B),
               children: <Widget>[
-                ListTile(
-                  title: const Text('หลักสูตรที่ 1'),
+               ListTile(
+                  title: const Text('หลักสูตรทั้งหมด'),
                   onTap: () {
-                    Navigator.pop(context);
-                    // TODO: Implement navigation to Course 1 page
+                    Navigator.pop(context); // Close the drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                               CourseAllPage(userName: userName, userId: userId)), // Navigate to a new page
+                    );
                   },
                 ),
                 ListTile(
-                  title: const Text('หลักสูตรที่ 2'),
+                  title: const Text('หลักสูตรใหม่ล่าสุด'),
                   onTap: () {
-                    Navigator.pop(context);
-                    // TODO: Implement navigation to Course 2 page
-                  },
-                ),
-                ListTile(
-                  title: const Text('หลักสูตรที่ 3'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    // TODO: Implement navigation to Course 3 page
+                    Navigator.pop(context); // Close the drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                               CourseNewPage(userName: userName, userId: userId)), // Navigate to a new page
+                    );
                   },
                 ),
               ],
@@ -104,19 +110,30 @@ class DrawerPage extends StatelessWidget {
               leading: const Icon(Icons.chat),
               title: const Text('คำถาม'),
               iconColor: Colors.white,
-              onTap: () {
-                // TODO: Implement navigation to the chat page
+                onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ReportPage(userName: userName, userId: userId)),
+                );
               },
             ),
             ListTile(
-              leading: const Icon(Icons.info),
+              leading: const Icon(Icons.help_outline),
               title: const Text('เกี่ยวกับเรา'),
               iconColor: Colors.white,
-              onTap: () {
-                // TODO: Implement navigation to the about us page
+               onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          AboutUsPage(userName: userName, userId: userId)),
+                );
               },
             ),
-           
           ],
         ),
       ),

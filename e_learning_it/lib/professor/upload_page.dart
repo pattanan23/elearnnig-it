@@ -3,16 +3,18 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'dart:async';
+import 'dart:convert'; // เพิ่ม import นี้
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:e_learning_it/professor/drawer_processor.dart';
 import 'package:e_learning_it/professor/navbar_professor.dart';
-import 'package:e_learning_it/error_dialog_page.dart'; // เพิ่ม import สำหรับ ErrorDialogPage
+import 'package:e_learning_it/error_dialog_page.dart';
 
 class UploadCoursePage extends StatefulWidget {
   final String userName;
   final String userId;
 
-  const UploadCoursePage({super.key, required this.userName, required this.userId});
+  const UploadCoursePage(
+      {super.key, required this.userName, required this.userId});
 
   @override
   State<UploadCoursePage> createState() => _UploadCoursePageState();
@@ -20,15 +22,15 @@ class UploadCoursePage extends StatefulWidget {
 
 class _UploadCoursePageState extends State<UploadCoursePage> {
   final _formKey = GlobalKey<FormState>();
-  final _courseCodeController = TextEditingController(); 
-  final _courseNameController = TextEditingController(); 
+  final _courseCodeController = TextEditingController();
+  final _courseNameController = TextEditingController();
   final _shortDescriptionController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _objectiveController = TextEditingController();
 
   PlatformFile? _selectedImagePlatformFile;
   PlatformFile? _selectedVideoPlatformFile;
-  PlatformFile? _selectedPdfPlatformFile; 
+  PlatformFile? _selectedPdfPlatformFile;
 
   bool _isSubmitting = false;
   double _submitProgress = 0.0;
@@ -92,9 +94,11 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
 
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
-      if (_selectedImagePlatformFile == null && _selectedVideoPlatformFile == null && _selectedPdfPlatformFile == null) {
-        // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog
-        _showErrorDialog('กรุณาเลือกไฟล์รูปภาพ วิดีโอ หรือ PDF อย่างน้อย 1 ไฟล์');
+      if (_selectedImagePlatformFile == null &&
+          _selectedVideoPlatformFile == null &&
+          _selectedPdfPlatformFile == null) {
+        _showErrorDialog(
+            'กรุณาเลือกไฟล์รูปภาพ วิดีโอ หรือ PDF อย่างน้อย 1 ไฟล์');
         return;
       }
 
@@ -104,17 +108,17 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
       });
 
       final userId = widget.userId;
-      
+
       var uri = Uri.parse('http://localhost:3006/api/courses');
       var request = http.MultipartRequest('POST', uri);
-      
+
       request.fields['course_code'] = _courseCodeController.text;
       request.fields['course_name'] = _courseNameController.text;
       request.fields['short_description'] = _shortDescriptionController.text;
       request.fields['description'] = _descriptionController.text;
       request.fields['objective'] = _objectiveController.text;
       request.fields['user_id'] = userId;
-      
+
       if (_selectedImagePlatformFile != null) {
         if (kIsWeb) {
           request.files.add(http.MultipartFile.fromBytes(
@@ -130,7 +134,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
           ));
         }
       }
-      
+
       if (_selectedVideoPlatformFile != null) {
         if (kIsWeb) {
           request.files.add(http.MultipartFile.fromBytes(
@@ -165,7 +169,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
 
       try {
         final http.StreamedResponse response = await request.send();
-        
+
         Timer.periodic(const Duration(milliseconds: 100), (timer) {
           if (!mounted) {
             timer.cancel();
@@ -181,9 +185,9 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
         });
 
         final responseBody = await response.stream.bytesToString();
-
+        
+        // แก้ไขส่วนนี้
         if (response.statusCode == 201) {
-          // ใช้ Dialog แทน ScaffoldMessenger สำหรับการแจ้งเตือนสำเร็จ
           showDialog(
             context: context,
             builder: (BuildContext context) {
@@ -201,7 +205,6 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
               );
             },
           ).then((_) {
-            // ทำการ clear ข้อมูลและ navigate หลังจาก Dialog ถูกปิด
             _courseCodeController.clear();
             _courseNameController.clear();
             _shortDescriptionController.clear();
@@ -212,7 +215,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
               _selectedVideoPlatformFile = null;
               _selectedPdfPlatformFile = null;
             });
-            
+
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -223,13 +226,12 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
               ),
             );
           });
-
         } else {
-          // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog สำหรับการแจ้งเตือนข้อผิดพลาด
-          _showErrorDialog('ส่งข้อมูลล้มเหลว: ${response.statusCode} - $responseBody');
+          final responseData = json.decode(responseBody);
+          final errorMessage = responseData['message'] ?? 'ไม่ทราบข้อผิดพลาด';
+          _showErrorDialog(errorMessage);
         }
       } catch (e) {
-        // เปลี่ยนจาก ScaffoldMessenger เป็น Dialog สำหรับการแจ้งเตือนข้อผิดพลาด
         _showErrorDialog('เกิดข้อผิดพลาดในการส่งข้อมูล: $e');
       } finally {
         setState(() {
@@ -240,11 +242,15 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
     }
   }
 
+  // ... (โค้ดส่วนอื่น ๆ ที่คุณมีอยู่)
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
-      drawer: DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
+      appBar:
+          NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
+      drawer:
+          DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
       body: SingleChildScrollView(
         child: Container(
           padding: const EdgeInsets.all(32.0),
@@ -269,7 +275,8 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                 Center(
                   child: Column(
                     children: [
-                      const Icon(Icons.upload_file, size: 48, color: Colors.black54),
+                      const Icon(Icons.upload_file,
+                          size: 48, color: Colors.black54),
                       const SizedBox(height: 8),
                       const Text(
                         'อัปโหลดหลักสูตร',
@@ -286,34 +293,40 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                 _buildTextField(
                   controller: _courseCodeController,
                   label: 'รหัสวิชา',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
+                  maxLength: 8,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _courseNameController,
                   label: 'หัวข้อเรื่อง',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่หัวข้อเรื่อง' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่หัวข้อเรื่อง' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _shortDescriptionController,
                   label: 'รายละเอียด (สั้นๆ)',
                   maxLines: 3,
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _descriptionController,
                   label: 'คำอธิบายหลักสูตร',
                   maxLines: 3,
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _objectiveController,
                   label: 'วัตถุประสงค์',
                   maxLines: 3,
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่วัตถุประสงค์' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่วัตถุประสงค์' : null,
                 ),
                 const SizedBox(height: 24),
                 _buildFilePicker(
@@ -349,7 +362,8 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                           height: 24,
                           width: 24,
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                             strokeWidth: 2,
                           ),
                         )
@@ -366,11 +380,14 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
     );
   }
 
+  // ... (โค้ด widget อื่น ๆ ที่เหมือนเดิม)
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     int maxLines = 1,
     String? Function(String?)? validator,
+    int? maxLength,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,6 +399,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          maxLength: maxLength,
           maxLines: maxLines,
           decoration: InputDecoration(
             filled: true,
@@ -398,6 +416,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
               borderRadius: BorderRadius.circular(8.0),
               borderSide: const BorderSide(color: Colors.green, width: 2.0),
             ),
+            counterText: "",
           ),
           validator: validator,
         ),
@@ -430,7 +449,8 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Text(
                     fileName ?? 'ไม่มีไฟล์ที่เลือก',
-                    style: TextStyle(color: fileName != null ? Colors.black : Colors.grey),
+                    style: TextStyle(
+                        color: fileName != null ? Colors.black : Colors.grey),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -438,7 +458,8 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
               ElevatedButton.icon(
                 onPressed: _isSubmitting ? null : onPressed,
                 icon: const Icon(Icons.upload, color: Colors.white),
-                label: const Text('อัปโหลด', style: TextStyle(color: Colors.white)),
+                label: const Text('อัปโหลด',
+                    style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   shape: const RoundedRectangleBorder(
