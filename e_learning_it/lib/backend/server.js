@@ -140,152 +140,132 @@ async function saveCourseToDatabase(courseData) {
     }
 }
 
-async function updateCoursePathsInDatabase(courseId, imageNames, videoNames, pdfNames) {
-    const query = `
-        UPDATE courses
-        SET name_image = $1, name_vdo = $2, name_file = $3
-        WHERE course_id = $4;
-    `;
-    // ใช้ JSON.stringify สำหรับ Array เพื่อเก็บใน PostgreSQL
-    const values = [
-        imageNames.length > 0 ? JSON.stringify(imageNames) : null,
-        videoNames.length > 0 ? JSON.stringify(videoNames) : null,
-        pdfNames.length > 0 ? JSON.stringify(pdfNames) : null,
-        courseId
-    ];
+// Function to save video lesson details to a new database table
+async function saveVideoLessonsToDatabase(courseId, videoLessons) {
+    const client = await pool.connect();
     try {
-        const result = await pool.query(query, values);
-        return result;
+        await client.query('BEGIN');
+        const lessonQueries = videoLessons.map(lesson => {
+            const query = `
+                INSERT INTO video_lessons (
+                    course_id, video_name, short_description, video_path, pdf_path
+                )
+                VALUES ($1, $2, $3, $4, $5);
+            `;
+            const values = [
+                courseId,
+                lesson.videoName,
+                lesson.videoDescription,
+                lesson.videoFileName,
+                lesson.pdfFileName,
+            ];
+            return client.query(query, values);
+        });
+        await Promise.all(lessonQueries);
+        await client.query('COMMIT');
     } catch (error) {
-        console.error('Error updating course paths in database:', error);
+        await client.query('ROLLBACK');
+        console.error('Error saving video lessons to database:', error);
         throw error;
+    } finally {
+        client.release();
     }
 }
 
-// Function to split the video file using FFmpeg, now with a buffer
-function splitVideoFromBuffer(videoBuffer, outputPath, startTime, duration, outputFileName) {
-    return new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(videoBuffer)
-            .setStartTime(startTime)
-            .setDuration(duration)
-            .output(outputPath)
-            .on('end', () => {
-                console.log(`Video segment created: ${outputFileName}`);
-                resolve();
-            })
-            .on('error', (err) => {
-                console.error(`Error during video splitting for ${outputFileName}:`, err);
-                reject(err);
-            })
-            .run();
-    });
-}
-
 // Endpoint for uploading course
-app.post('/api/courses', upload.fields([
-    { name: 'name_image', maxCount: 1 },
-    { name: 'name_vdo', maxCount: 1 },
-    { name: 'name_file', maxCount: 10 }
-]), async (req, res) => {
+app.post('/api/courses', upload.any(), async (req, res) => {
     const { course_code, course_name, short_description, description, objective, user_id } = req.body;
     if (!user_id || !course_code) {
         return res.status(400).json({ message: 'User ID and Course Code are required.' });
     }
 
     try {
-        // ส่วนที่เพิ่มเข้ามาสำหรับการตรวจสอบรหัสวิชา
+        // Check if course code exists
         const checkCourseCodeQuery = 'SELECT COUNT(*) FROM subject_master WHERE course_code = $1';
         const courseCodeExists = await pool.query(checkCourseCodeQuery, [course_code]);
         const count = parseInt(courseCodeExists.rows[0].count);
 
         if (count === 0) {
-            // ส่ง response เฉพาะเมื่อรหัสวิชาไม่ถูกต้อง
             return res.status(404).json({ message: 'รหัสวิชาไม่ถูกต้อง หรือไม่มีอยู่ในระบบ' });
         }
 
-        // ส่วนที่เหลือของโค้ดการอัปโหลดจะถูกย้ายเข้ามาใน try-block นี้
+        // Save initial course data
         const initialCourseData = { course_code, course_name, short_description, description, objective, user_id };
         const newCourse = await saveCourseToDatabase(initialCourseData);
         const courseId = newCourse.course_id;
 
         const courseFolderPath = path.join(UPLOAD_DIR, user_id.toString(), courseId.toString());
         const imageFolderPath = path.join(courseFolderPath, 'image');
-        const pdfFolderPath = path.join(courseFolderPath, 'file');
-        const videoFolderPath = path.join(courseFolderPath, 'vdo');
+        const lessonsFolderPath = path.join(courseFolderPath, 'lessons'); 
 
         fs.mkdirSync(imageFolderPath, { recursive: true });
-        fs.mkdirSync(pdfFolderPath, { recursive: true });
-        fs.mkdirSync(videoFolderPath, { recursive: true });
+        fs.mkdirSync(lessonsFolderPath, { recursive: true });
 
-        const imageNames = [];
-        const videoNames = [];
-        const pdfNames = [];
-
-        // 1. Save image file(s)
-        if (req.files && req.files['name_image'] && req.files['name_image'].length > 0) {
-            const imageFile = req.files['name_image'][0];
-            const imageName = `image1${path.extname(imageFile.originalname)}`;
+        // Save the main course image
+        let imageName = null;
+        const imageFile = req.files.find(file => file.fieldname === 'name_image');
+        if (imageFile) {
+            imageName = `course_image${path.extname(imageFile.originalname)}`;
             const imagePath = path.join(imageFolderPath, imageName);
             fs.writeFileSync(imagePath, imageFile.buffer);
-            imageNames.push(imageName);
         }
 
-        // 2. Save PDF files
-        if (req.files && req.files['name_file'] && req.files['name_file'].length > 0) {
-            req.files['name_file'].forEach((pdfFile, index) => {
-                const pdfName = `file${index + 1}${path.extname(pdfFile.originalname)}`;
-                const pdfPath = path.join(pdfFolderPath, pdfName);
-                fs.writeFileSync(pdfPath, pdfFile.buffer);
-                pdfNames.push(pdfName);
-            });
-        }
+        // Process dynamic video lessons
+        const videoLessonsData = [];
+        let lessonIndex = 0;
         
-        // 3. Split and save video
-        if (req.files && req.files['name_vdo'] && req.files['name_vdo'].length > 0) {
-            const videoFile = req.files['name_vdo'][0];
-            const videoBuffer = videoFile.buffer;
+        while (req.body[`video_name_${lessonIndex}`]) {
+            const lesson = {};
+            
+            const videoFile = req.files.find(file => file.fieldname === `name_vdo_${lessonIndex}`);
+            const pdfFile = req.files.find(file => file.fieldname === `name_file_${lessonIndex}`);
 
-            // สร้างเส้นทางไฟล์ชั่วคราว
-            const tempVideoPath = path.join(os.tmpdir(), `temp_video_${Date.now()}${path.extname(videoFile.originalname)}`);
-            fs.writeFileSync(tempVideoPath, videoBuffer); 
+            const videoName = req.body[`video_name_${lessonIndex}`];
+            const videoDescription = req.body[`video_description_${lessonIndex}`];
 
-            try {
-                const videoDuration = await new Promise((resolve, reject) => {
-                    ffmpeg.ffprobe(tempVideoPath, (err, metadata) => {
-                        if (err) return reject(err);
-                        resolve(metadata.format.duration);
-                    });
-                });
+            const lessonFolder = path.join(lessonsFolderPath, `lesson_${lessonIndex + 1}`);
+            fs.mkdirSync(lessonFolder, { recursive: true });
 
-                const segmentDuration = videoDuration / 4;
-                for (let i = 0; i < 4; i++) {
-                    const startTime = i * segmentDuration;
-                    const videoName = `vdo${i + 1}${path.extname(videoFile.originalname)}`;
-                    const outputPath = path.join(videoFolderPath, videoName);
-                    
-                    await splitVideoFromBuffer(tempVideoPath, outputPath, startTime, segmentDuration, videoName);
-                    videoNames.push(videoName);
-                }
-            } finally {
-                fs.unlinkSync(tempVideoPath);
+            let videoFileName = null;
+            if (videoFile) {
+                videoFileName = `lesson_${lessonIndex + 1}_vdo${path.extname(videoFile.originalname)}`;
+                const videoPath = path.join(lessonFolder, videoFileName);
+                fs.writeFileSync(videoPath, videoFile.buffer);
             }
+
+            let pdfFileName = null;
+            if (pdfFile) {
+                pdfFileName = `lesson_${lessonIndex + 1}_file${path.extname(pdfFile.originalname)}`;
+                const pdfPath = path.join(lessonFolder, pdfFileName);
+                fs.writeFileSync(pdfPath, pdfFile.buffer);
+            }
+
+            videoLessonsData.push({
+                videoName,
+                videoDescription,
+                videoFileName,
+                pdfFileName,
+            });
+
+            lessonIndex++;
         }
-        
-        // 4. Update file names in the database
-        await updateCoursePathsInDatabase(
-            courseId,
-            imageNames,
-            videoNames,
-            pdfNames
-        );
+
+        // Update main course image path in the database
+        const updateCourseQuery = `
+            UPDATE courses
+            SET name_image = $1
+            WHERE course_id = $2;
+        `;
+        await pool.query(updateCourseQuery, [imageName, courseId]);
+
+        // Save video lesson data to a new table
+        await saveVideoLessonsToDatabase(courseId, videoLessonsData);
 
         res.status(201).json({
             message: 'Course and files uploaded successfully!',
             courseId: courseId,
-            imageNames: imageNames,
-            videoNames: videoNames,
-            pdfNames: pdfNames,
+            imageName: imageName,
+            videoLessons: videoLessonsData,
         });
 
     } catch (error) {
@@ -297,7 +277,7 @@ app.post('/api/courses', upload.fields([
 // Endpoint ใหม่สำหรับแสดงรายการคอร์สที่ถูกปรับปรุง
 app.get('/api/show_courses', async (req, res) => {
     try {
-      const sql = `
+        const sql = `
         SELECT 
           c.course_id,
           c.course_code, 
@@ -309,27 +289,29 @@ app.get('/api/show_courses', async (req, res) => {
           u.last_name
         FROM courses c
         JOIN users u ON c.user_id = u.user_id
-      `;
-      const result = await pool.query(sql);
-      
-      const courses = result.rows.map(row => {
-        const images = row.name_image ? JSON.parse(row.name_image) : [];
+        `;
+        const result = await pool.query(sql);
+
+        const courses = result.rows.map(row => {
+            const image_url = row.name_image
+                ? `http://${req.hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${row.name_image}`
+                : null;
+            
+            return {
+                course_id: row.course_id,
+                course_code: row.course_code,
+                course_name: row.course_name,
+                short_description: row.short_description,
+                image_url: image_url,
+                professor_name: `${row.first_name} ${row.last_name}`
+            };
+        });
         
-        return {
-          course_id: row.course_id,
-          course_code: row.course_code,
-          course_name: row.course_name,
-          short_description: row.short_description,
-          image_url: images.length > 0 ? `http://${req.hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${images[0]}` : null,
-          professor_name: `${row.first_name} ${row.last_name}`
-        };
-      });
-      
-      res.json(courses);
-      
+        res.json(courses);
+        
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      res.status(500).json({ error: 'Database query failed' });
+        console.error('Error fetching courses:', error);
+        res.status(500).json({ error: 'Database query failed' });
     }
 });
 
@@ -343,11 +325,9 @@ app.get('/api/course/:courseId', async (req, res) => {
                 c.course_code,
                 c.course_name,
                 c.short_description,
-                c.description,      -- ดึง field description
-                c.objective,        -- ดึง field objective
+                c.description,
+                c.objective,
                 c.name_image,
-                c.name_file,
-                c.name_vdo,
                 c.user_id,
                 u.first_name,
                 u.last_name
@@ -363,14 +343,24 @@ app.get('/api/course/:courseId', async (req, res) => {
 
         const courseData = result.rows[0];
 
-        // แปลง JSON string เป็น Array และจัดการค่าว่าง
-        const imageNames = courseData.name_image ? JSON.parse(courseData.name_image) : [];
-        const fileNames = courseData.name_file ? JSON.parse(courseData.name_file) : [];
-        const videoNames = courseData.name_vdo ? JSON.parse(courseData.name_vdo) : [];
+        // Fetch video lessons for this course
+        const videoLessonsQuery = `
+            SELECT video_name, short_description AS video_description, video_path, pdf_path
+            FROM video_lessons
+            WHERE course_id = $1
+            ORDER BY video_lesson_id ASC;
+        `;
+        const videoLessonsResult = await pool.query(videoLessonsQuery, [courseId]);
 
-        // สร้าง URL ของรูปภาพ
-        const imageUrl = imageNames.length > 0
-            ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/image/${imageNames[0]}`
+        const videoLessons = videoLessonsResult.rows.map(lesson => ({
+            ...lesson,
+            video_url: lesson.video_path ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/lessons/lesson_${videoLessonsResult.rows.indexOf(lesson) + 1}/${lesson.video_path}` : null,
+            pdf_url: lesson.pdf_path ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/lessons/lesson_${videoLessonsResult.rows.indexOf(lesson) + 1}/${lesson.pdf_path}` : null,
+        }));
+
+        // Build image URL
+        const imageUrl = courseData.name_image
+            ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/image/${courseData.name_image}`
             : 'https://placehold.co/600x400.png';
 
         res.json({
@@ -378,13 +368,12 @@ app.get('/api/course/:courseId', async (req, res) => {
             course_code: courseData.course_code,
             course_name: courseData.course_name,
             short_description: courseData.short_description,
-            description: courseData.description || '', // ส่งค่าว่างถ้าเป็น null
-            objective: courseData.objective || '',     // ส่งค่าว่างถ้าเป็น null
+            description: courseData.description || '',
+            objective: courseData.objective || '',
             professor_name: `${courseData.first_name} ${courseData.last_name}`,
             image_url: imageUrl,
-            file_names: fileNames, // ส่งแค่ชื่อไฟล์
-            video_names: videoNames, // ส่งแค่ชื่อไฟล์
-            user_id: courseData.user_id, // เพิ่ม user_id
+            lessons: videoLessons, // Send the lessons array
+            user_id: courseData.user_id,
         });
 
     } catch (error) {
@@ -396,7 +385,7 @@ app.get('/api/course/:courseId', async (req, res) => {
 // Endpoint ใหม่สำหรับแสดงรายการคอร์สทั้งหมดที่เรียงตาม ID จากน้อยไปมาก
 app.get('/api/courses/all_by_id', async (req, res) => {
     try {
-      const sql = `
+        const sql = `
         SELECT 
           c.course_id,
           c.course_code, 
@@ -409,27 +398,29 @@ app.get('/api/courses/all_by_id', async (req, res) => {
         FROM courses c
         JOIN users u ON c.user_id = u.user_id
         ORDER BY c.course_id ASC
-      `;
-      const result = await pool.query(sql);
-      
-      const courses = result.rows.map(row => {
-        const images = row.name_image ? JSON.parse(row.name_image) : [];
+        `;
+        const result = await pool.query(sql);
         
-        return {
-          course_id: row.course_id,
-          course_code: row.course_code,
-          course_name: row.course_name,
-          short_description: row.short_description,
-          image_url: images.length > 0 ? `http://${req.hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${images[0]}` : null,
-          professor_name: `${row.first_name} ${row.last_name}`
-        };
-      });
-      
-      res.json(courses);
-      
+        const courses = result.rows.map(row => {
+            const image_url = row.name_image
+                ? `http://${req.hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${row.name_image}`
+                : null;
+        
+            return {
+                course_id: row.course_id,
+                course_code: row.course_code,
+                course_name: row.course_name,
+                short_description: row.short_description,
+                image_url: image_url,
+                professor_name: `${row.first_name} ${row.last_name}`
+            };
+        });
+        
+        res.json(courses);
+        
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      res.status(500).json({ error: 'Database query failed' });
+        console.error('Error fetching courses:', error);
+        res.status(500).json({ error: 'Database query failed' });
     }
 });
 
@@ -457,45 +448,51 @@ app.post('/api/reports', async (req, res) => {
     }
 });
 
-// Endpoint สำหรับดึงข้อมูลวิดีโอของคอร์ส
-app.get('/api/course/video/:courseId', async (req, res) => {
+// **Endpoint ใหม่สำหรับดึงข้อมูลวิดีโอแต่ละตอนของคอร์ส**
+app.get('/api/course/:courseId/videos', async (req, res) => {
     try {
         const { courseId } = req.params;
-        const query = `
-            SELECT 
-                c.course_id,
-                c.user_id,
-                c.name_vdo,
-                c.course_name
-            FROM courses c
-            WHERE c.course_id = $1;
+        
+        const courseQuery = `
+            SELECT user_id, course_name
+            FROM courses
+            WHERE course_id = $1;
         `;
-        const result = await pool.query(query, [courseId]);
-
-        if (result.rows.length === 0) {
+        const courseResult = await pool.query(courseQuery, [courseId]);
+        
+        if (courseResult.rows.length === 0) {
             return res.status(404).json({ error: 'Course not found' });
         }
+        
+        const courseData = courseResult.rows[0];
 
-        const courseData = result.rows[0];
+        const videoLessonsQuery = `
+            SELECT video_lesson_id, video_name, short_description AS video_description, video_path, pdf_path
+            FROM video_lessons
+            WHERE course_id = $1
+            ORDER BY video_lesson_id ASC;
+        `;
+        const videoLessonsResult = await pool.query(videoLessonsQuery, [courseId]);
 
-        // แปลง JSON string ใน name_vdo เป็น Array และจัดการค่าว่าง
-        const videoNames = courseData.name_vdo ? JSON.parse(courseData.name_vdo) : [];
-
-        // สร้าง URL สำหรับแต่ละวิดีโอ
-        const videoUrls = videoNames.map(fileName => {
-            return `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseData.course_id}/vdo/${fileName}`;
+        const videoLessons = videoLessonsResult.rows.map((lesson, index) => {
+            const lessonNumber = index + 1;
+            return {
+                video_lesson_id: lesson.video_lesson_id,
+                video_name: lesson.video_name,
+                video_description: lesson.video_description,
+                video_url: lesson.video_path ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseId}/lessons/lesson_${lessonNumber}/${lesson.video_path}` : null,
+                pdf_url: lesson.pdf_path ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseId}/lessons/lesson_${lessonNumber}/${lesson.pdf_path}` : null,
+            };
         });
 
         res.json({
-            course_id: courseData.course_id,
-            user_id: courseData.user_id,
+            course_id: courseId,
             course_name: courseData.course_name,
-            video_names: videoNames, // ส่งแค่ชื่อไฟล์
-            video_urls: videoUrls, // ส่ง URL ที่สร้างขึ้นมา
+            lessons: videoLessons,
         });
 
     } catch (error) {
-        console.error('Error fetching course video data:', error);
+        console.error('Error fetching course videos:', error);
         res.status(500).json({ error: 'Database query failed' });
     }
 });
