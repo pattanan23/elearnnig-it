@@ -1,3 +1,4 @@
+// Your existing imports...
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
@@ -7,12 +8,35 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:e_learning_it/professor/drawer_processor.dart';
 import 'package:e_learning_it/professor/navbar_professor.dart';
 import 'package:e_learning_it/error_dialog_page.dart';
+import 'package:e_learning_it/professor/main_professor_page.dart';
+
+// New data model for video lessons
+class Lesson {
+  final TextEditingController videoNameController;
+  final TextEditingController videoDescriptionController;
+  PlatformFile? videoPlatformFile;
+  PlatformFile? pdfPlatformFile;
+  bool isUploading;
+  double uploadProgress;
+  bool isUploaded;
+
+  Lesson({
+    required this.videoNameController,
+    required this.videoDescriptionController,
+    this.videoPlatformFile,
+    this.pdfPlatformFile,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
+    this.isUploaded = false,
+  });
+}
 
 class UploadCoursePage extends StatefulWidget {
   final String userName;
   final String userId;
 
-  const UploadCoursePage({super.key, required this.userName, required this.userId});
+  const UploadCoursePage(
+      {super.key, required this.userName, required this.userId});
 
   @override
   State<UploadCoursePage> createState() => _UploadCoursePageState();
@@ -21,105 +45,122 @@ class UploadCoursePage extends StatefulWidget {
 class _UploadCoursePageState extends State<UploadCoursePage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Part 1: Course Details
   final _courseCodeController = TextEditingController();
   final _courseNameController = TextEditingController();
   final _shortDescriptionController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _objectiveController = TextEditingController();
   PlatformFile? _selectedImagePlatformFile;
+  String? _courseId;
 
-  // Part 2: Video Lessons
-  final List<Map<String, dynamic>> _videoLessons = [];
+  // Use the new data model for better structure
+  final List<Lesson> _videoLessons = [];
 
-  bool _isSubmitting = false;
-  double _submitProgress = 0.0;
+  bool _isSubmittingCourse = false;
 
   @override
   void dispose() {
     _courseCodeController.dispose();
     _courseNameController.dispose();
-    _courseNameController.dispose();
     _shortDescriptionController.dispose();
+    _descriptionController.dispose();
     _descriptionController.dispose();
     _objectiveController.dispose();
     for (var lesson in _videoLessons) {
-      (lesson['videoNameController'] as TextEditingController).dispose();
-      (lesson['videoDescriptionController'] as TextEditingController).dispose();
+      lesson.videoNameController.dispose();
+      lesson.videoDescriptionController.dispose();
     }
     super.dispose();
   }
 
-  // สำหรับ _pickImage()
-Future<void> _pickImage() async {
-  FilePickerResult? result = await FilePicker.platform.pickFiles(
-    type: FileType.image,
-  );
-
-  // การตรวจสอบที่ถูกต้องและปลอดภัย
-  if (result != null && result.files.isNotEmpty) {
-    setState(() {
-      _selectedImagePlatformFile = result.files.first; // ใช้ .first แทน .single
-    });
-  }
-}
-
-// สำหรับ _pickFileForLesson()
-Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async {
-  FilePickerResult? result;
-  if (type == 'video') {
-    result = await FilePicker.platform.pickFiles(type: FileType.video);
-  } else if (type == 'pdf') {
-    result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+  Future<void> _pickImage() async {
+    FilePickerResult? result =
+        await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        _selectedImagePlatformFile = result.files.first;
+      });
+    }
   }
 
-  // การตรวจสอบที่ถูกต้องและปลอดภัย
-  if (result != null && result.files.isNotEmpty) {
-    setState(() {
-      if (type == 'video') {
-        lesson['videoPlatformFile'] = result!.files.first;
-      } else {
-        lesson['pdfPlatformFile'] = result!.files.first;
-      }
-    });
+  Future<void> _pickFileForLesson(Lesson lesson, String type) async {
+    FilePickerResult? result;
+    if (type == 'video') {
+      result = await FilePicker.platform.pickFiles(type: FileType.video);
+    } else if (type == 'pdf') {
+      result = await FilePicker.platform
+          .pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+    }
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        if (type == 'video') {
+          lesson.videoPlatformFile = result?.files.first;
+        } else {
+          lesson.pdfPlatformFile = result?.files.first;
+        }
+      });
+    }
   }
-}
 
   void _addVideoLesson() {
     setState(() {
-      _videoLessons.add({
-        'videoNameController': TextEditingController(),
-        'videoDescriptionController': TextEditingController(),
-        'videoPlatformFile': null,
-        'pdfPlatformFile': null,
-      });
+      _videoLessons.add(
+        Lesson(
+          videoNameController: TextEditingController(),
+          videoDescriptionController: TextEditingController(),
+        ),
+      );
+    });
+  }
+
+  void _removeVideoLesson(int index) {
+    setState(() {
+      final lesson = _videoLessons[index];
+      lesson.videoNameController.dispose();
+      lesson.videoDescriptionController.dispose();
+      _videoLessons.removeAt(index);
     });
   }
 
   void _showErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+        context: context,
+        builder: (context) => ErrorDialogPage(message: message));
+  }
+
+  void _showSuccessDialog(String title, String message) {
+    if (!mounted) return;
     showDialog(
       context: context,
-      builder: (context) {
-        return ErrorDialogPage(message: message);
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('ตกลง'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
       },
     );
   }
 
-  Future<void> _submitForm() async {
+  Future<void> _submitCourseDetails() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedImagePlatformFile == null) {
         _showErrorDialog('กรุณาเลือกไฟล์รูปภาพหลักสูตร');
         return;
       }
-      
-      if (_videoLessons.isEmpty) {
-        _showErrorDialog('กรุณาเพิ่มวิดีโออย่างน้อย 1 ตอน');
-        return;
-      }
+
+      if (!mounted) return;
 
       setState(() {
-        _isSubmitting = true;
-        _submitProgress = 0.0;
+        _isSubmittingCourse = true;
       });
 
       final userId = widget.userId;
@@ -127,276 +168,310 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
       var uri = Uri.parse('http://localhost:3006/api/courses');
       var request = http.MultipartRequest('POST', uri);
 
-      // Part 1: Course Details
+      request.fields['user_id'] = userId;
       request.fields['course_code'] = _courseCodeController.text;
       request.fields['course_name'] = _courseNameController.text;
       request.fields['short_description'] = _shortDescriptionController.text;
       request.fields['description'] = _descriptionController.text;
       request.fields['objective'] = _objectiveController.text;
-      request.fields['user_id'] = userId;
 
-      // Correctly handle image file based on platform
       if (kIsWeb) {
         request.files.add(http.MultipartFile.fromBytes(
-          'name_image',
-          _selectedImagePlatformFile!.bytes!,
-          filename: _selectedImagePlatformFile!.name,
-        ));
+            'name_image', _selectedImagePlatformFile!.bytes!,
+            filename: _selectedImagePlatformFile!.name));
       } else {
         request.files.add(await http.MultipartFile.fromPath(
-          'name_image',
-          _selectedImagePlatformFile!.path!,
-          filename: _selectedImagePlatformFile!.name,
-        ));
-      }
-
-      // Part 2: Video Lessons
-      for (int i = 0; i < _videoLessons.length; i++) {
-        final lesson = _videoLessons[i];
-        final videoFile = lesson['videoPlatformFile'] as PlatformFile?;
-        final pdfFile = lesson['pdfPlatformFile'] as PlatformFile?;
-
-        request.fields['video_name_$i'] = (lesson['videoNameController'] as TextEditingController).text;
-        request.fields['video_description_$i'] = (lesson['videoDescriptionController'] as TextEditingController).text;
-
-        // Correctly handle video file based on platform
-        if (videoFile != null) {
-          if (kIsWeb) {
-            request.files.add(http.MultipartFile.fromBytes(
-              'name_vdo_$i',
-              videoFile.bytes!,
-              filename: videoFile.name,
-            ));
-          } else {
-            request.files.add(await http.MultipartFile.fromPath(
-              'name_vdo_$i',
-              videoFile.path!,
-              filename: videoFile.name,
-            ));
-          }
-        }
-
-        // Correctly handle PDF file based on platform
-        if (pdfFile != null) {
-          if (kIsWeb) {
-            request.files.add(http.MultipartFile.fromBytes(
-              'name_file_$i',
-              pdfFile.bytes!,
-              filename: pdfFile.name,
-            ));
-          } else {
-            request.files.add(await http.MultipartFile.fromPath(
-              'name_file_$i',
-              pdfFile.path!,
-              filename: pdfFile.name,
-            ));
-          }
-        }
+            'name_image', _selectedImagePlatformFile!.path!,
+            filename: _selectedImagePlatformFile!.name));
       }
 
       try {
-        final http.StreamedResponse response = await request.send();
-        
-        Timer.periodic(const Duration(milliseconds: 100), (timer) {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          setState(() {
-            _submitProgress += 0.05;
-            if (_submitProgress >= 1.0) {
-              _submitProgress = 1.0;
-              timer.cancel();
-            }
-          });
-        });
+        final streamedResponse = await request.send();
+        final response = await http.Response.fromStream(streamedResponse);
 
-        final responseBody = await response.stream.bytesToString();
-        
+        if (!mounted) return;
+
         if (response.statusCode == 201) {
-          showDialog(
-            context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                title: const Text('สำเร็จ'),
-                content: const Text('ส่งข้อมูลและอัปโหลดไฟล์สำเร็จ!'),
-                actions: <Widget>[
-                  TextButton(
-                    child: const Text('ตกลง'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ],
-              );
-            },
-          ).then((_) {
-            _courseCodeController.clear();
-            _courseNameController.clear();
-            _shortDescriptionController.clear();
-            _descriptionController.clear();
-            _objectiveController.clear();
-            setState(() {
-              _selectedImagePlatformFile = null;
-              _videoLessons.clear();
-            });
-            // Navigating to a new instance of the page to reset the form completely
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => UploadCoursePage(
-                  userName: widget.userName,
-                  userId: widget.userId,
-                ),
-              ),
-            );
+          final responseData = json.decode(response.body);
+          setState(() {
+            _courseId = responseData['course_id'].toString();
           });
+          _showSuccessDialog('บันทึกสำเร็จ',
+              'บันทึกข้อมูลหลักสูตรสำเร็จแล้ว! กรุณาอัปโหลดวิดีโอในส่วนถัดไป');
         } else {
-          final responseData = json.decode(responseBody);
+          final responseData = json.decode(response.body);
           final errorMessage = responseData['message'] ?? 'ไม่ทราบข้อผิดพลาด';
           _showErrorDialog(errorMessage);
         }
       } catch (e) {
+        if (!mounted) return;
         _showErrorDialog('เกิดข้อผิดพลาดในการส่งข้อมูล: $e');
       } finally {
+        if (!mounted) return;
         setState(() {
-          _isSubmitting = false;
-          _submitProgress = 0.0;
+          _isSubmittingCourse = false;
         });
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
-      drawer: DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
-      body: SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.all(32.0),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.0),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 5,
-                blurRadius: 7,
-                offset: const Offset(0, 3),
+  Future<void> _uploadVideoLesson(int index) async {
+    if (_courseId == null) {
+      _showErrorDialog('กรุณาบันทึกข้อมูลหลักสูตรก่อน');
+      return;
+    }
+
+    final lesson = _videoLessons[index];
+
+    if (lesson.videoPlatformFile == null) {
+      _showErrorDialog('กรุณาเลือกไฟล์วิดีโอสำหรับวิดีโอตอนที่ ${index + 1}');
+      return;
+    }
+
+    // Check if the widget is mounted before calling setState
+    if (!mounted) return;
+
+    setState(() {
+      lesson.isUploading = true;
+      lesson.uploadProgress = 0.0;
+    });
+
+    var uri = Uri.parse('http://localhost:3006/api/upload-video');
+    var request = http.MultipartRequest('POST', uri);
+
+    request.fields['course_id'] = _courseId!;
+    request.fields['video_name'] = lesson.videoNameController.text;
+    request.fields['short_description'] =
+        lesson.videoDescriptionController.text;
+
+    if (kIsWeb) {
+      request.files.add(http.MultipartFile.fromBytes(
+          'video', lesson.videoPlatformFile!.bytes!,
+          filename: lesson.videoPlatformFile!.name));
+      if (lesson.pdfPlatformFile != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+            'pdf', lesson.pdfPlatformFile!.bytes!,
+            filename: lesson.pdfPlatformFile!.name));
+      }
+    } else {
+      request.files.add(await http.MultipartFile.fromPath(
+          'video', lesson.videoPlatformFile!.path!,
+          filename: lesson.videoPlatformFile!.name));
+      if (lesson.pdfPlatformFile != null) {
+        request.files.add(await http.MultipartFile.fromPath(
+            'pdf', lesson.pdfPlatformFile!.path!,
+            filename: lesson.pdfPlatformFile!.name));
+      }
+    }
+
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        _showSuccessDialog(
+            'อัปโหลดสำเร็จ', 'อัปโหลดวิดีโอตอนที่ ${index + 1} สำเร็จแล้ว!');
+        setState(() {
+          lesson.isUploaded = true;
+          lesson.uploadProgress = 1.0; // Mark as 100% complete
+        });
+      } else {
+        final responseData = json.decode(response.body);
+        final errorMessage = responseData['message'] ?? 'ไม่ทราบข้อผิดพลาด';
+        _showErrorDialog(errorMessage);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorDialog('เกิดข้อผิดพลาดในการอัปโหลด: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        lesson.isUploading = false;
+      });
+    }
+  }
+
+  void _onFinishUpload() {
+    if (_courseId == null) {
+      _showErrorDialog('กรุณาบันทึกข้อมูลหลักสูตรก่อน');
+      return;
+    }
+
+    final allLessonsUploaded =
+        _videoLessons.every((lesson) => lesson.isUploaded == true);
+
+    if (_videoLessons.isEmpty) {
+      _showErrorDialog('กรุณาเพิ่มและอัปโหลดวิดีโออย่างน้อย 1 ตอน');
+      return;
+    }
+
+    if (allLessonsUploaded) {
+      // Show success dialog first
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('อัปโหลดสำเร็จทั้งหมด'),
+            content: const Text(
+                'หลักสูตรของคุณถูกสร้างและอัปโหลดวิดีโอสำเร็จเรียบร้อยแล้ว'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('ตกลง'),
+                onPressed: () {
+                  // Navigate to MainProfessorPage after user clicks 'OK'
+                  Navigator.of(context).pop(); // Close the dialog
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MainProfessorPage(
+                          userName: widget.userName, userId: widget.userId),
+                    ),
+                  );
+                },
               ),
             ],
-          ),
+          );
+        },
+      );
+    } else {
+      _showErrorDialog(
+          'ยังมีวิดีโอที่ยังไม่ได้อัปโหลด กรุณาอัปโหลดให้ครบทุกตอน');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPadding = screenWidth > 600 ? 100.0 : 20.0;
+    final double verticalPadding = 24.0;
+
+    return Scaffold(
+      appBar:
+          NavbarProcessorPage(userName: widget.userName, userId: widget.userId),
+      drawer:
+          DrawerProcessorPage(userName: widget.userName, userId: widget.userId),
+      backgroundColor: Colors.grey[200],
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding, vertical: verticalPadding),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Column(
-                    children: [
-                      const Icon(Icons.upload_file, size: 48, color: Colors.black54),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'อัปโหลดหลักสูตร',
-                        style: TextStyle(
-                          fontSize: 24,
+                Row(
+                  children: [
+                    Icon(Icons.upload_file, size: 48, color: Colors.green[700]),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'อัปโหลดหลักสูตรใหม่',
+                      style: TextStyle(
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // --- Part 1: Course Details ---
-                _buildSectionTitle('1. เนื้อหาหลักสูตร'),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _courseCodeController,
-                  label: 'รหัสวิชา',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
-                  maxLength: 8,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _courseNameController,
-                  label: 'หัวข้อเรื่อง',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่หัวข้อเรื่อง' : null,
-                ),
-                const SizedBox(height: 16),
-                _buildSingleLineTextField(
-                  controller: _shortDescriptionController,
-                  label: 'รายละเอียด (สั้นๆ)',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null,
-                ),
-                const SizedBox(height: 16),
-                _buildSingleLineTextField(
-                  controller: _descriptionController,
-                  label: 'คำอธิบายหลักสูตร',
-                  validator: (value) => value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null,
-                ),
-                const SizedBox(height: 16),
-                _buildObjectiveTextField(),
-                const SizedBox(height: 24),
-                _buildFilePicker(
-                  label: 'อัปโหลดรูปภาพ',
-                  onPressed: _pickImage,
-                  fileName: _selectedImagePlatformFile?.name,
-                ),
-
-                const SizedBox(height: 32),
-                const Divider(color: Colors.grey),
-                const SizedBox(height: 32),
-
-                // --- Part 2: Video Lessons ---
-                _buildSectionTitle('2. วิดีโอหลักสูตร'),
-                const SizedBox(height: 16),
-                ..._videoLessons.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final lesson = entry.value;
-                  return _buildVideoLessonCard(lesson, index);
-                }).toList(),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: _addVideoLesson,
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text('เพิ่มวิดีโออีก', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // --- Final Submit Button ---
-                ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitForm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E7D32),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
+                          color: Colors.black87),
                     ),
-                  ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'ยืนยันการเพิ่มหลักสูตร',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSectionCard(
+                  title: '1. เนื้อหาหลักสูตร',
+                  children: [
+                    _buildTextField(
+                        controller: _courseCodeController,
+                        label: 'รหัสวิชา',
+                        validator: (value) =>
+                            value!.isEmpty ? 'กรุณาใส่รหัสวิชา' : null,
+                        maxLength: 8),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                        controller: _courseNameController,
+                        label: 'หัวข้อเรื่อง',
+                        validator: (value) =>
+                            value!.isEmpty ? 'กรุณาใส่หัวข้อเรื่อง' : null),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                        controller: _shortDescriptionController,
+                        label: 'รายละเอียด (สั้นๆ)',
+                        validator: (value) =>
+                            value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                        controller: _descriptionController,
+                        label: 'คำอธิบายหลักสูตร',
+                        validator: (value) =>
+                            value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null),
+                    const SizedBox(height: 16),
+                    _buildObjectiveTextField(),
+                    const SizedBox(height: 24),
+                    _buildFilePicker(
+                        label: 'อัปโหลดรูปภาพ',
+                        onPressed: _pickImage,
+                        fileName: _selectedImagePlatformFile?.name),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed:
+                          _isSubmittingCourse ? null : _submitCourseDetails,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0)),
+                      ),
+                      child: _isSubmittingCourse
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                  strokeWidth: 2))
+                          : const Text('บันทึกรายละเอียดหลักสูตร',
+                              style: TextStyle(fontSize: 18)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSectionCard(
+                  title: '2. วิดีโอหลักสูตร',
+                  children: [
+                    ..._videoLessons.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final lesson = entry.value;
+                      return _buildVideoLessonCard(lesson, index);
+                    }).toList(),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _addVideoLesson,
+                      icon: const Icon(Icons.add, color: Colors.white),
+                      label: const Text('เพิ่มวิดีโออีก',
+                          style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: _onFinishUpload,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0)),
+                      ),
+                      child: const Text(
+                        'เสร็จสิ้น',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -406,61 +481,48 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-    int? maxLength,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          maxLength: maxLength,
-          maxLines: maxLines,
-          keyboardType: maxLines == 1 ? TextInputType.text : TextInputType.multiline,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.green, width: 2.0),
-            ),
-            counterText: "",
+  // New helper widget to build a section with a white background, shadow, and rounded corners
+  Widget _buildSectionCard(
+      {required String title, required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 5,
+            blurRadius: 7,
+            offset: const Offset(0, 3),
           ),
-          validator: validator,
-        ),
-      ],
+        ],
+      ),
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSectionTitle(title),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
     );
   }
 
-  Widget _buildSingleLineTextField({
-    required TextEditingController controller,
-    required String label,
-    String? Function(String?)? validator,
-  }) {
+  // Helper widgets...
+  Widget _buildSectionTitle(String title) {
+    return Text(title,
+        style: const TextStyle(
+            fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87));
+  }
+
+  Widget _buildTextField(
+      {required TextEditingController controller,
+      required String label,
+      int maxLines = 1,
+      String? Function(String?)? validator,
+      int? maxLength}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -468,23 +530,23 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          maxLines: 1,
-          keyboardType: TextInputType.text,
+          maxLength: maxLength,
+          maxLines: maxLines,
+          keyboardType:
+              maxLines == 1 ? TextInputType.text : TextInputType.multiline,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.grey, width: 1.0)),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.grey, width: 1.0)),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.green, width: 2.0),
-            ),
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.green, width: 2.0)),
+            counterText: "",
           ),
           validator: validator,
         ),
@@ -496,7 +558,8 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('วัตถุประสงค์ (ใส่เป็นข้อๆ)', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('วัตถุประสงค์ (ใส่เป็นข้อๆ)',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _objectiveController,
@@ -506,18 +569,16 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.grey, width: 1.0)),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.grey, width: 1.0),
-            ),
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.grey, width: 1.0)),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              borderSide: const BorderSide(color: Colors.green, width: 2.0),
-            ),
-            hintText: 'เช่น เรียนรู้พื้นฐานการเขียนโปรแกรม  - สามารถสร้างแอปพลิเคชันง่ายๆ ได้',
+                borderRadius: BorderRadius.circular(8.0),
+                borderSide: const BorderSide(color: Colors.green, width: 2.0)),
+            hintText:
+                'เช่น เรียนรู้พื้นฐานการเขียนโปรแกรม - สามารถสร้างแอปพลิเคชันง่ายๆ ได้',
           ),
           validator: (value) => value!.isEmpty ? 'กรุณาใส่วัตถุประสงค์' : null,
         ),
@@ -525,18 +586,14 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
     );
   }
 
-  Widget _buildFilePicker({
-    required String label,
-    required VoidCallback onPressed,
-    String? fileName,
-  }) {
+  Widget _buildFilePicker(
+      {required String label,
+      required VoidCallback onPressed,
+      String? fileName}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -550,22 +607,23 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Text(
                     fileName ?? 'ไม่มีไฟล์ที่เลือก',
-                    style: TextStyle(color: fileName != null ? Colors.black : Colors.grey),
+                    style: TextStyle(
+                        color: fileName != null ? Colors.black : Colors.grey),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : onPressed,
+                onPressed: onPressed,
                 icon: const Icon(Icons.upload, color: Colors.white),
-                label: const Text('อัปโหลด', style: TextStyle(color: Colors.white)),
+                label: const Text('อัปโหลด',
+                    style: TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.only(
-                      topRight: Radius.circular(8.0),
-                      bottomRight: Radius.circular(8.0),
-                    ),
+                        topRight: Radius.circular(8.0),
+                        bottomRight: Radius.circular(8.0)),
                   ),
                 ),
               ),
@@ -576,7 +634,7 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
     );
   }
 
-  Widget _buildVideoLessonCard(Map<String, dynamic> lesson, int index) {
+  Widget _buildVideoLessonCard(Lesson lesson, int index) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       elevation: 4,
@@ -585,35 +643,80 @@ Future<void> _pickFileForLesson(Map<String, dynamic> lesson, String type) async 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'วิดีโอตอนที่ ${index + 1}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('วิดีโอตอนที่ ${index + 1}',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _removeVideoLesson(index),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            _buildTextField(
-              controller: lesson['videoNameController'],
-              label: 'ชื่อคลิป',
-              validator: (value) => value!.isEmpty ? 'กรุณาใส่ชื่อคลิป' : null,
+            // Disable text fields while uploading
+            AbsorbPointer(
+              absorbing: lesson.isUploading,
+              child: _buildTextField(
+                  controller: lesson.videoNameController,
+                  label: 'ชื่อคลิป',
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่ชื่อคลิป' : null),
             ),
             const SizedBox(height: 16),
-            _buildTextField(
-              controller: lesson['videoDescriptionController'],
-              label: 'รายละเอียดสั้นๆ',
-              maxLines: 2,
-              validator: (value) => value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null,
+            AbsorbPointer(
+              absorbing: lesson.isUploading,
+              child: _buildTextField(
+                  controller: lesson.videoDescriptionController,
+                  label: 'รายละเอียดสั้นๆ',
+                  maxLines: 2,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณาใส่รายละเอียด' : null),
             ),
             const SizedBox(height: 16),
-            _buildFilePicker(
-              label: 'ไฟล์การเรียนการสอน (PDF)',
-              onPressed: () => _pickFileForLesson(lesson, 'pdf'),
-              fileName: (lesson['pdfPlatformFile'] as PlatformFile?)?.name,
+            AbsorbPointer(
+              absorbing: lesson.isUploading,
+              child: _buildFilePicker(
+                  label: 'ไฟล์การเรียนการสอน (PDF)',
+                  onPressed: () => _pickFileForLesson(lesson, 'pdf'),
+                  fileName: lesson.pdfPlatformFile?.name),
             ),
             const SizedBox(height: 16),
-            _buildFilePicker(
-              label: 'ไฟล์วิดีโอ',
-              onPressed: () => _pickFileForLesson(lesson, 'video'),
-              fileName: (lesson['videoPlatformFile'] as PlatformFile?)?.name,
+            AbsorbPointer(
+              absorbing: lesson.isUploading,
+              child: _buildFilePicker(
+                  label: 'ไฟล์วิดีโอ',
+                  onPressed: () => _pickFileForLesson(lesson, 'video'),
+                  fileName: lesson.videoPlatformFile?.name),
             ),
+            const SizedBox(height: 16),
+            if (lesson.isUploading)
+              LinearProgressIndicator(value: lesson.uploadProgress),
+            if (!lesson.isUploaded)
+              ElevatedButton.icon(
+                onPressed:
+                    lesson.isUploading ? null : () => _uploadVideoLesson(index),
+                icon: lesson.isUploading
+                    ? const CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white)
+                    : const Icon(Icons.save, color: Colors.white),
+                label: Text(
+                  lesson.isUploading ? 'กำลังอัปโหลด...' : 'บันทึกวิดีโอตอนนี้',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            if (lesson.isUploaded)
+              const Text('✅ อัปโหลดสำเร็จ',
+                  style: TextStyle(
+                      color: Colors.green, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

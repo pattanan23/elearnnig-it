@@ -1,10 +1,46 @@
-// ในไฟล์ CourseDetailPage.dart
-
+// CourseDetailPage.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http; // เพิ่ม import นี้เผื่อต้องการใช้
 
-// คลาส Course ที่ถูกย้ายมาจาก course_model.dart
+// คลาส Lesson สำหรับข้อมูลวิดีโอแต่ละตอน
+class Lesson {
+  final int id;
+  final String videoName;
+  final String videoDescription;
+  final String? videoUrl;
+  final String? pdfUrl;
+
+  Lesson({
+    required this.id,
+    required this.videoName,
+    required this.videoDescription,
+    this.videoUrl,
+    this.pdfUrl,
+  });
+
+  factory Lesson.fromJson(Map<String, dynamic> json) {
+    // แก้ไข: ตรวจสอบและแปลงค่า id ให้เป็น int อย่างปลอดภัย
+    final rawId = json['video_lesson_id'];
+    int parsedId;
+    if (rawId is int) {
+      parsedId = rawId;
+    } else if (rawId is String) {
+      parsedId = int.tryParse(rawId) ?? 0; // แปลง String เป็น int หรือให้ค่าเริ่มต้นเป็น 0
+    } else {
+      parsedId = 0; // ถ้าไม่ใช่ทั้ง int และ String ให้ค่าเริ่มต้นเป็น 0
+    }
+
+    return Lesson(
+      id: parsedId,
+      videoName: json['video_name'] ?? 'ไม่ระบุชื่อวิดีโอ',
+      videoDescription: json['video_description'] ?? '',
+      videoUrl: json['video_url'],
+      pdfUrl: json['pdf_url'],
+    );
+  }
+}
+
+// คลาส Course ที่ถูกแก้ไขให้รองรับ lessons
 class Course {
   final String courseId;
   final String userId;
@@ -15,7 +51,7 @@ class Course {
   final String objective;
   final String professorName;
   final String imageUrl;
-  final List<String> fileNames;
+  final List<Lesson> lessons;
 
   Course({
     required this.courseId,
@@ -27,10 +63,15 @@ class Course {
     required this.objective,
     required this.professorName,
     required this.imageUrl,
-    required this.fileNames,
+    required this.lessons,
   });
 
   factory Course.fromJson(Map<String, dynamic> json) {
+    var lessonsFromJson = json['lessons'] as List?;
+    List<Lesson> lessonList = lessonsFromJson != null
+        ? lessonsFromJson.map((i) => Lesson.fromJson(i)).toList()
+        : [];
+
     return Course(
       courseId: json['course_id']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? '',
@@ -41,18 +82,14 @@ class Course {
       objective: json['objective'] ?? '',
       professorName: json['professor_name'] ?? 'ไม่ระบุ',
       imageUrl: json['image_url'] ?? 'https://placehold.co/600x400.png',
-      fileNames: (json['file_names'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [],
+      lessons: lessonList,
     );
   }
 }
 
-// คลาส CourseDetailPage ของคุณ
 class CourseDetailPage extends StatelessWidget {
   final Course course;
-   final String userName; // เพิ่มตัวแปรนี้
+  final String userName;
   final String userId;
 
   const CourseDetailPage({
@@ -64,13 +101,10 @@ class CourseDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Course Description: ${course.description}');
-  print('Course Objective: ${course.objective}');
-  print('File Names: ${course.fileNames}');
     return Scaffold(
-      // สมมติว่า NavbarProcessorPage เป็น Widget ที่มีอยู่แล้ว
-      // appBar: NavbarProcessorPage(userName: userName, userId: userId), 
-      body: SingleChildScrollView( // ใช้ SingleChildScrollView ครอบ body
+      // ตัวอย่างการใช้ Navbar (ต้อง import และสร้าง Navbar ขึ้นมาก่อน)
+      // appBar: NavbarNormal(userName: userName, userId: userId), 
+      body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -79,7 +113,6 @@ class CourseDetailPage extends StatelessWidget {
               height: 200,
               width: double.infinity,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
                 image: DecorationImage(
                   image: NetworkImage(course.imageUrl),
                   fit: BoxFit.cover,
@@ -121,30 +154,31 @@ class CourseDetailPage extends StatelessWidget {
       length: 4,
       child: Column(
         children: [
+          // แก้ไข: ปรับ Text ใน Tab ให้รองรับข้อความยาวด้วย TextOverflow.ellipsis
           const TabBar(
             indicatorColor: Color(0xFF2E7D32),
             labelColor: Color(0xFF2E7D32),
             unselectedLabelColor: Colors.black54,
             tabs: [
-              Tab(text: 'รายละเอียดหลักสูตร'),
-              Tab(text: 'เอกสารประกอบการเรียน'),
-              Tab(text: 'วุฒิบัตร'),
-              Tab(text: 'ผู้สอน'),
+              Tab(child: Text('รายละเอียดหลักสูตร', overflow: TextOverflow.ellipsis)),
+              Tab(child: Text('วิดีโอ', overflow: TextOverflow.ellipsis)),
+              Tab(child: Text('เอกสารประกอบการเรียน', overflow: TextOverflow.ellipsis)),
+              Tab(child: Text('ผู้สอน', overflow: TextOverflow.ellipsis)),
             ],
           ),
-          SizedBox( // ใช้ SizedBox แทน Expanded เพื่อให้ TabBarView มีความสูงที่กำหนดได้
+          SizedBox(
             height: 600, // สามารถปรับความสูงตามความเหมาะสม
             child: TabBarView(
               children: [
                 // Tab 1: รายละเอียดหลักสูตร
                 _buildDetailsTab(),
 
-                // Tab 2: เอกสารประกอบการเรียน
+                // Tab 2: วิดีโอ (Tab ใหม่)
+                _buildVideoLessonsTab(context),
+
+                // Tab 3: เอกสารประกอบการเรียน (ใช้ lessons แทน fileNames)
                 _buildFileListView(context),
-
-                // Tab 3: วุฒิบัตร
-                _buildTabContent('วุฒิบัตร', 'เนื้อหาเกี่ยวกับวุฒิบัตร'),
-
+                
                 // Tab 4: ผู้สอน
                 _buildTabContent('ผู้สอน', course.professorName),
               ],
@@ -170,25 +204,25 @@ class CourseDetailPage extends StatelessWidget {
   }
 
   Widget _buildDetailSection(String title, String content) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        title,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF2E7D32),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2E7D32),
+          ),
         ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        content, // <--- แสดง content โดยตรง
-        style: const TextStyle(fontSize: 16, height: 1.5),
-      ),
-    ],
-  );
-}
+        const SizedBox(height: 8),
+        Text(
+          content,
+          style: const TextStyle(fontSize: 16, height: 1.5),
+        ),
+      ],
+    );
+  }
 
   Widget _buildTabContent(String title, String content) {
     return SingleChildScrollView(
@@ -214,33 +248,75 @@ class CourseDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildFileListView(BuildContext context) {
-    if (course.fileNames.isEmpty) {
-      return const Center(child: Text('ไม่พบเอกสารประกอบการเรียน'));
+  Widget _buildVideoLessonsTab(BuildContext context) {
+    if (course.lessons.isEmpty) {
+      return const Center(child: Text('ไม่พบวิดีโอการเรียนการสอนสำหรับหลักสูตรนี้'));
     }
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: course.fileNames.map((fileName) {
-            final fileUrl = 'http://localhost:3006/data/${course.userId}/${course.courseId}/file/$fileName';
-            return ListTile(
-              leading: const Icon(Icons.file_copy, color: Color(0xFF2E7D32)),
-              title: Text(fileName),
-              onTap: () async {
-                final Uri uri = Uri.parse(fileUrl);
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16.0),
+      itemCount: course.lessons.length,
+      itemBuilder: (context, index) {
+        final lesson = course.lessons[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          elevation: 2,
+          child: ListTile(
+            leading: const Icon(Icons.play_circle_filled, color: Colors.blue, size: 30),
+            title: Text('วิดีโอตอนที่ ${index + 1}: ${lesson.videoName}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(lesson.videoDescription),
+            onTap: () async {
+              if (lesson.videoUrl != null) {
+                final Uri uri = Uri.parse(lesson.videoUrl!);
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ไม่สามารถเปิดไฟล์ได้')),
+                    const SnackBar(content: Text('ไม่สามารถเล่นวิดีโอได้')),
                   );
                 }
-              },
-            );
-          }).toList(),
-        ),
-      ),
+              } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('ไม่พบลิงก์วิดีโอ')),
+                  );
+              }
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFileListView(BuildContext context) {
+    // กรองเฉพาะ lesson ที่มีไฟล์ PDF
+    final filesWithPdf = course.lessons.where((lesson) => lesson.pdfUrl != null).toList();
+
+    if (filesWithPdf.isEmpty) {
+      return const Center(child: Text('ไม่พบเอกสารประกอบการเรียนสำหรับหลักสูตรนี้'));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16.0),
+      itemCount: filesWithPdf.length,
+      itemBuilder: (context, index) {
+        final lesson = filesWithPdf[index];
+        final fileName = lesson.pdfUrl!.split('/').last;
+        return ListTile(
+          leading: const Icon(Icons.file_copy, color: Color(0xFF2E7D32)),
+          title: Text(fileName),
+          onTap: () async {
+            final Uri uri = Uri.parse(lesson.pdfUrl!);
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('ไม่สามารถเปิดไฟล์ได้')),
+              );
+            }
+          },
+        );
+      },
     );
   }
 }

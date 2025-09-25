@@ -168,6 +168,7 @@ class MainProfessorPage extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         try {
+          // ใช้ courseId โดยตรงแทนการแปลง
           final response = await http.get(Uri.parse('http://localhost:3006/api/course/${course.courseId}'));
           
           if (response.statusCode == 200) {
@@ -184,13 +185,11 @@ class MainProfessorPage extends StatelessWidget {
               ),
             );
           } else {
-            // ถ้าดึงข้อมูลไม่สำเร็จ
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('ไม่สามารถดึงข้อมูลรายละเอียดหลักสูตรได้')),
             );
           }
         } catch (e) {
-          // จัดการข้อผิดพลาดในการเรียก API
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.toString()}')),
           );
@@ -229,9 +228,10 @@ class MainProfessorPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCourseInfoRow('รหัสวิชา:', course.courseCode.toString()),
+                  // 🎯 การแก้ไข: ใช้ Null-aware operator ?? '' เพื่อป้องกันค่า null
+                  _buildCourseInfoRow('รหัสวิชา:', course.courseCode?.toString() ?? 'ไม่ระบุ'),
                   _buildCourseInfoRow('ชื่อวิชา:', course.courseName),
-                  _buildCourseInfoRow('รายละเอียด:', course.shortDescription.toString(), maxLines: 2),
+                  _buildCourseInfoRow('รายละเอียด:', course.shortDescription?.toString() ?? 'ไม่มีข้อมูล', maxLines: 2),
                   _buildCourseInfoRow('อาจารย์ผู้สอน:', course.professorName),
                 ],
               ),

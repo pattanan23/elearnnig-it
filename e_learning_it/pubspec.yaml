@@ -31,14 +31,17 @@ dependencies:
   flutter:
     sdk: flutter
 
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # เพิ่ม dependencies ที่จำเป็นสำหรับโค้ด VdoPage.dart:
   cupertino_icons: ^1.0.2
+  url_launcher: ^6.1.10
+  video_player: ^2.7.0
+  
+  # Dependencies อื่น ๆ ที่คุณมีอยู่ (ถ้ามี)
   file_picker: ^5.2.5
   http: ^0.13.4
-  url_launcher: ^6.1.10
-  video_player: ^2.7.0 
+  image_picker: ^0.8.5+3 
+  provider: ^6.0.5 
+  #   path: ../screen_size
 
 dev_dependencies:
   flutter_test:
@@ -56,19 +59,16 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
 
+  # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/logo3.png
     - assets/images/logo2not.png
-    
-  # To add assets to your application, add an assets section, like this:
-  #   - images/a_dot_ham.jpeg
-
+  
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
 

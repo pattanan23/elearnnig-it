@@ -169,6 +169,7 @@ class MainPage extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         try {
+          // ใช้ courseId โดยตรงแทนการแปลง
           final response = await http.get(
               Uri.parse('http://localhost:3006/api/course/${course.courseId}'));
 
@@ -230,10 +231,10 @@ class MainPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCourseInfoRow('รหัสวิชา:', course.courseCode.toString()),
+                  // 🎯 การแก้ไข: ใช้ Null-aware operator ?? '' เพื่อป้องกันค่า null
+                  _buildCourseInfoRow('รหัสวิชา:', course.courseCode?.toString() ?? 'ไม่ระบุ'),
                   _buildCourseInfoRow('ชื่อวิชา:', course.courseName),
-                  _buildCourseInfoRow('รายละเอียด:', course.shortDescription.toString(),
-                      maxLines: 2),
+                  _buildCourseInfoRow('รายละเอียด:', course.shortDescription?.toString() ?? 'ไม่มีข้อมูล', maxLines: 2),
                   _buildCourseInfoRow('อาจารย์ผู้สอน:', course.professorName),
                 ],
               ),

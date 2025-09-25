@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'screen_size.dart';
 import '../student_outsiders/main_page.dart';
 import '../error_dialog_page.dart';
-
+import '../professor/main_professor_page.dart'; // import ไฟล์ main_professor_page.dart
 
 Future<http.Response> createUser(Map<String, dynamic> userData) async {
   final url = Uri.parse('http://localhost:3006/api/users');
@@ -17,7 +17,6 @@ Future<http.Response> createUser(Map<String, dynamic> userData) async {
     );
     return response;
   } catch (e) {
-    
     throw Exception('Error during API call: $e');
   }
 }
@@ -33,16 +32,15 @@ class _MemberScreenState extends State<MemberScreen> {
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
   final TextEditingController studentIDController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   String? selectedRole;
   final List<String> _roles = ['อาจารย์', 'นิสิต', 'บุคคลภายนอก'];
 
   final _formKey = GlobalKey<FormState>();
 
-  // ฟังก์ชันแสดง ErrorDialogPage สำหรับแจ้งเตือนข้อผิดพลาด
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
@@ -58,7 +56,6 @@ class _MemberScreenState extends State<MemberScreen> {
     const double mobileBreakpoint = 600;
     final bool isMobile = screenWidth < mobileBreakpoint;
     return Scaffold(
-      
       body: Center(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(
@@ -73,13 +70,11 @@ class _MemberScreenState extends State<MemberScreen> {
     );
   }
 
-  // หน้าสมัคร
   Widget _buildMemberForm() {
     return Form(
       key: _formKey,
       child: Column(
         children: [
-          // dropdown สำหรับเลือก role
           DropdownButtonFormField<String>(
             value: selectedRole,
             decoration: InputDecoration(
@@ -112,8 +107,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // Student ID
           TextFormField(
             controller: studentIDController,
             enabled: selectedRole == 'นิสิต',
@@ -145,8 +138,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // First Name
           TextFormField(
             controller: firstNameController,
             decoration: const InputDecoration(
@@ -163,8 +154,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // Last Name
           TextFormField(
             controller: lastNameController,
             decoration: const InputDecoration(
@@ -181,8 +170,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // Email
           TextFormField(
             controller: emailController,
             decoration: InputDecoration(
@@ -215,8 +202,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // Password
           TextFormField(
             controller: passwordController,
             decoration: const InputDecoration(
@@ -237,8 +222,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // ยืนยัน Password
           TextFormField(
             controller: confirmPasswordController,
             decoration: const InputDecoration(
@@ -259,8 +242,6 @@ class _MemberScreenState extends State<MemberScreen> {
             },
           ),
           const SizedBox(height: 24),
-
-          // Register Button
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -280,36 +261,45 @@ class _MemberScreenState extends State<MemberScreen> {
                   };
 
                   try {
-                    // Call API and handle the response
                     final response = await createUser(userData);
 
-                    if (response.statusCode == 201) { // Check for 201 Created
-                      // แก้ไข: Parse response body to get user data
+                    if (response.statusCode == 201) {
                       final responseData = jsonDecode(response.body);
-                      final userName = responseData['first_name'] + ' ' + responseData['last_name'];
-                      final userId = responseData['user_id'];
+                      final newUser = responseData['user'];
+                      final firstName = newUser['first_name'] ?? '';
+                      final lastName = newUser['last_name'] ?? '';
+                      final userName = '$firstName $lastName'.trim();
                       
-                      // แก้ไข: Navigate to MainPage with required parameters
+                      // 🎯 การแก้ไข: แปลง userId จาก int เป็น String
+                      final userId = newUser['user_id'].toString();
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('สมัครสมาชิกสำเร็จ!')),
                       );
 
-                      // Navigate to MainPage only on successful registration
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (context) => MainPage(userName: userName, userId: userId),
-                        ),
-                      );
+                      if (selectedRole == 'อาจารย์') {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => MainProfessorPage(
+                                userName: userName, userId: userId),
+                          ),
+                        );
+                      } else if (selectedRole == 'นิสิต' ||
+                          selectedRole == 'บุคคลภายนอก') {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => MainPage(
+                                userName: userName, userId: userId),
+                          ),
+                        );
+                      }
                     } else if (response.statusCode == 409) {
-                      // Handle duplicate email or student ID errors
                       final errorBody = jsonDecode(response.body);
                       _showErrorDialog(context, errorBody['error']);
                     } else {
-                      // Handle other server errors
                       _showErrorDialog(context, 'เกิดข้อผิดพลาดในการสมัคร: ${response.statusCode}');
                     }
                   } catch (e) {
-                    // Handle network errors
                     _showErrorDialog(context, 'เกิดข้อผิดพลาดในการเชื่อมต่อ: $e');
                   }
                 } else {
