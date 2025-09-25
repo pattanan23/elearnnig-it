@@ -1,8 +1,17 @@
 // CourseDetailPage.dart
 import 'package:flutter/material.dart';
+// ต้องเพิ่ม import สำหรับ HTTP และ JSON
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:e_learning_it/student_outsiders/course/vdo_page.dart';
+import 'package:e_learning_it/student_outsiders/drawer_page.dart';
+import 'package:e_learning_it/student_outsiders/navbar_normal.dart';
 
-// The Course class has been updated to use a Lesson class for detailed lesson data.
+// Class Course และ Lesson (ใช้โครงสร้างเดิม แต่ต้องมั่นใจว่า Lesson ถูก Import หรือ Define)
+
+// สมมติว่า Lesson ถูก Import จาก vdo_page.dart แล้ว
+// class Lesson { ... }
+
 class Course {
   final String courseId;
   final String userId;
@@ -13,7 +22,7 @@ class Course {
   final String objective;
   final String professorName;
   final String imageUrl;
-  final List<Lesson> lessons; // Updated to hold a list of Lesson objects.
+  final List<Lesson> lessons;
 
   Course({
     required this.courseId,
@@ -32,7 +41,6 @@ class Course {
     var lessonsList = json['lessons'] as List<dynamic>? ?? [];
     List<Lesson> parsedLessons = lessonsList.map((lessonJson) {
       return Lesson(
-        // แก้ไขตรงนี้เพื่อแปลงค่า 'video_lesson_id' จาก String เป็น int
         id: int.tryParse(lessonJson['video_lesson_id']?.toString() ?? '0') ?? 0, 
         videoName: lessonJson['video_name'] ?? '',
         videoDescription: lessonJson['video_description'] ?? '',
@@ -51,13 +59,13 @@ class Course {
       objective: json['objective'] ?? '',
       professorName: json['professor_name'] ?? 'ไม่ระบุ',
       imageUrl: json['image_url'] ?? 'https://placehold.co/600x400.png',
-      lessons: parsedLessons, // Now passes the full list of Lesson objects.
+      lessons: parsedLessons,
     );
   }
 }
 
-// Your CourseDetailPage class
-class CourseDetailPage extends StatelessWidget {
+// 💡 เปลี่ยนจาก StatelessWidget เป็น StatefulWidget
+class CourseDetailPage extends StatefulWidget {
   final Course course;
   final String userName;
   final String userId;
@@ -70,26 +78,107 @@ class CourseDetailPage extends StatelessWidget {
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    print('Course Description: ${course.description}');
-    print('Course Objective: ${course.objective}');
-    print('Number of lessons: ${course.lessons.length}');
+  State<CourseDetailPage> createState() => _CourseDetailPageState();
+}
+
+class _CourseDetailPageState extends State<CourseDetailPage> {
+  // 💡 URL สำหรับดึงข้อมูลความคืบหน้า (เปลี่ยน IP/Port ให้ถูกต้อง)
+  final String _apiGetProgressUrl = 'http://192.168.x.x:3006/api/get_progress'; 
+
+  // 💡 ฟังก์ชันใหม่: ดึงความคืบหน้าล่าสุด
+  Future<Map<String, dynamic>> _fetchLastProgress() async {
+    // กำหนดค่าเริ่มต้น
+    Map<String, dynamic> defaultProgress = {
+      'lessonId': 0, // 0 หมายถึง Lesson ID เริ่มต้น
+      'savedSeconds': 0,
+      'courseStatus': 'เรียนใหม่',
+    };
     
+    // หากไม่มีบทเรียนเลย ให้คืนค่าเริ่มต้น
+    if (widget.course.lessons.isEmpty) return defaultProgress;
+
+    try {
+      final response = await http.get(
+        // ส่ง userId และ courseId เพื่อขอข้อมูล progress
+        Uri.parse('$_apiGetProgressUrl/${widget.userId}/${widget.course.courseId}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['progress'] ?? defaultProgress;
+      } else if (response.statusCode == 404) {
+        // ยังไม่เคยดูเลย (API Node.js ส่ง 404 กลับมา)
+        return defaultProgress; 
+      } else {
+        print('Error fetching progress: ${response.statusCode}, Body: ${response.body}');
+        return defaultProgress;
+      }
+    } catch (e) {
+      print('Network error fetching progress: $e');
+      return defaultProgress;
+    }
+  }
+
+  // 💡 ฟังก์ชันใหม่: นำทางไปหน้าวิดีโอ
+  void _navigateToVideoPage(BuildContext context, Map<String, dynamic> progress) async {
+    int startLessonIndex = 0;
+    int startSavedSeconds = progress['savedSeconds'] ?? 0;
+    String status = progress['courseStatus'] ?? 'เรียนใหม่';
+    
+    // หากสถานะคือ 'เรียนต่อ' ให้นำทางไปยังบทเรียนที่ค้างไว้
+    if (status == 'เรียนต่อ' && progress['lessonId'] != null) {
+        final lastLessonId = progress['lessonId'];
+        
+        // ค้นหา index ของ Lesson ที่บันทึกไว้ใน List
+        final index = widget.course.lessons.indexWhere((l) => l.id == lastLessonId);
+        if (index != -1) {
+            startLessonIndex = index;
+        }
+    } else {
+        // ถ้า status คือ 'เรียนใหม่' หรือหา Lesson ID ไม่เจอ ให้เริ่มจากบทแรก
+        startSavedSeconds = 0;
+    }
+
+    // นำทางไป VdoPage
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VdoPage(
+          courseId: widget.course.courseId,
+          userId: widget.userId,
+          lessons: widget.course.lessons,
+          initialLessonIndex: startLessonIndex, // เริ่มที่วิดีโอที่ควรเรียนต่อ
+          initialSavedSeconds: startSavedSeconds, // เริ่มที่เวลาที่บันทึกไว้
+        ),
+      ),
+    );
+    
+    // เมื่อกลับมาจาก VdoPage ให้รีเฟรชหน้า CourseDetailPage เพื่ออัปเดตปุ่ม "เริ่ม/เรียนต่อ"
+    setState(() {});
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
+      appBar: NavbarPage(userName: widget.userName, userId: widget.userId),
+      drawer: DrawerPage(userName: widget.userName, userId: widget.userId),
       body: Stack(
         children: [
           SingleChildScrollView(
+            // ... (โค้ด SingleChildScrollView เดิม)
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ส่วนหัวหลักสูตร
+                // ส่วนหัวหลักสูตร (คงเดิม)
                 Container(
                   height: 200,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
                     image: DecorationImage(
-                      image: NetworkImage(course.imageUrl),
+                      image: NetworkImage(widget.course.imageUrl),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -98,7 +187,7 @@ class CourseDetailPage extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
-                        course.courseName,
+                        widget.course.courseName,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -120,41 +209,51 @@ class CourseDetailPage extends StatelessWidget {
               ],
             ),
           ),
-          // ปุ่ม "เริ่ม" ที่มุมขวาล่าง
+          
+          // 💡 ปุ่ม "เริ่ม" ที่ถูกห่อด้วย FutureBuilder
           Align(
             alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: ElevatedButton(
-                onPressed: () {
-                  // Pass the full lessons list to VdoPage.
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => VdoPage(
-                        courseId: course.courseId,
-                        userId: course.userId,
-                        lessons: course.lessons, // Pass the new lessons list.
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _fetchLastProgress(), // 💡 เรียก API เพื่อดึงความคืบหน้า
+              builder: (context, snapshot) {
+                String buttonText = 'เริ่มเรียน';
+                Map<String, dynamic> progressData = snapshot.data ?? {'courseStatus': 'เรียนใหม่'};
+                
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  buttonText = 'กำลังโหลด...';
+                } else if (snapshot.hasData) {
+                  if (progressData['courseStatus'] == 'เรียนต่อ') {
+                    buttonText = 'เรียนต่อ';
+                  } else if (progressData['courseStatus'] == 'เรียนใหม่' && progressData['savedSeconds'] > 0) {
+                     // อาจจะมี savedSeconds > 0 แต่สถานะเป็นเรียนใหม่ แสดงว่าดูจบแล้ว
+                     buttonText = 'ทบทวน';
+                  }
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: ElevatedButton(
+                    onPressed: snapshot.connectionState == ConnectionState.done && widget.course.lessons.isNotEmpty
+                        ? () => _navigateToVideoPage(context, progressData)
+                        : null, // ปิดการใช้งานปุ่มระหว่างโหลด
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    child: Text(
+                      buttonText,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'เริ่ม',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -162,9 +261,10 @@ class CourseDetailPage extends StatelessWidget {
     );
   }
 
+  // ... (โค้ด _buildTabsAndContent, _buildDetailsTab, _buildDetailSection, _buildTabContent, _buildFileListView เดิม)
+  
   Widget _buildTabsAndContent(BuildContext context) {
     return DefaultTabController(
-      // แก้ไข: ลด length เหลือ 3
       length: 3,
       child: Column(
         children: [
@@ -184,7 +284,7 @@ class CourseDetailPage extends StatelessWidget {
               children: [
                 _buildDetailsTab(),
                 _buildTabContent('วุฒิบัตร', 'เนื้อหาเกี่ยวกับวุฒิบัตร'),
-                _buildTabContent('ผู้สอน', course.professorName),
+                _buildTabContent('ผู้สอน', widget.course.professorName),
               ],
             ),
           ),
@@ -199,9 +299,9 @@ class CourseDetailPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDetailSection('รายละเอียด', course.description),
+          _buildDetailSection('รายละเอียด', widget.course.description),
           const SizedBox(height: 24),
-          _buildDetailSection('วัตถุประสงค์', course.objective),
+          _buildDetailSection('วัตถุประสงค์', widget.course.objective),
         ],
       ),
     );
@@ -252,7 +352,6 @@ class CourseDetailPage extends StatelessWidget {
     );
   }
 
-  // Note: This function is not used anymore in the current design.
   Widget _buildFileListView(BuildContext context) {
     return Container();
   }

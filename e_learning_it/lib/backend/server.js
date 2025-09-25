@@ -387,6 +387,96 @@ app.get('/api/course/:courseId/videos', async (req, res) => {
     }
 });
 
+// **ENDPOINT ที่ 3: บันทึกความคืบหน้าการเรียนวิดีโอ (Video Progress)**
+app.post('/api/save_progress', async (req, res) => {
+    const { 
+        userId, 
+        courseId, 
+        lessonId, 
+        savedSeconds, // เวลาที่ดูค้างไว้ (เป็นวินาที)
+        courseStatus // 'เรียนต่อ' หรือ 'เรียนใหม่'
+    } = req.body;
+
+    // ตรวจสอบข้อมูลที่จำเป็น
+    if (!userId || !courseId || !lessonId || savedSeconds === undefined || !courseStatus) {
+        return res.status(400).json({ message: 'Missing required progress data (userId, courseId, lessonId, savedSeconds, courseStatus).' });
+    }
+
+    // 💡 การ Log ข้อมูลที่ได้รับจาก Client
+    console.log('Received progress data:', req.body);
+    
+    try {
+        const query = `
+            INSERT INTO video_progress (user_id, course_id, lesson_id, saved_seconds, course_status, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            ON CONFLICT (user_id, lesson_id) DO UPDATE
+            SET 
+                saved_seconds = EXCLUDED.saved_seconds,
+                course_status = EXCLUDED.course_status,
+                updated_at = NOW()
+            RETURNING *;
+        `;
+        const values = [userId, courseId, lessonId, savedSeconds, courseStatus];
+        
+        // 💡 การ Log ค่าที่จะส่งเข้า Query
+        console.log('Query values:', values);
+
+        const result = await pool.query(query, values);
+
+        console.log(`Progress saved/updated for User ${userId}, Lesson ${lessonId}: ${savedSeconds}s, Status: ${courseStatus}`);
+
+        res.status(200).json({ 
+            message: 'Video progress saved successfully.',
+            progress: result.rows[0] 
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR saving video progress:', error);
+        // รหัส 23503: Foreign Key Violation (เช่น courseId/lessonId ไม่ถูกต้อง)
+        if (error.code === '23503') {
+            return res.status(404).json({ message: 'Course ID, Lesson ID, หรือ User ID ไม่ถูกต้อง (Foreign Key violation).', error: error.message });
+        }
+        res.status(500).json({ message: 'Internal server error during progress save. (Check console for full error)', error: error.message });
+    }
+});
+
+// **ENDPOINT ที่ 4: ดึงข้อมูลความคืบหน้าของบทเรียนที่ระบุ (Get Specific Lesson Progress)**
+app.get('/api/get_progress', async (req, res) => {
+    const { userId, courseId, lessonId } = req.query; // 💡 ดึงจาก query parameter
+
+    if (!userId || !courseId || !lessonId) {
+        return res.status(400).json({ message: 'Missing userId, courseId, or lessonId.' });
+    }
+
+    try {
+        const query = `
+            SELECT saved_seconds AS "savedSeconds"
+            FROM video_progress
+            WHERE user_id = $1 AND course_id = $2 AND lesson_id = $3;
+        `;
+        const result = await pool.query(query, [userId, courseId, lessonId]);
+
+        if (result.rows.length === 0) {
+            // 💡 คืนค่า 0 หากไม่พบข้อมูล เพื่อให้ Flutter เริ่มวิดีโอตั้งแต่ต้น
+            return res.status(200).json({ 
+                message: 'No progress found for this lesson.',
+                savedSeconds: 0 
+            });
+        }
+
+        console.log(`Progress fetched for User ${userId}, Course ${courseId}, Lesson ${lessonId}.`);
+        
+        res.status(200).json({ 
+            message: 'Progress fetched successfully.',
+            savedSeconds: result.rows[0].savedSeconds
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR fetching video progress:', error);
+        res.status(500).json({ message: 'Internal server error during progress fetch.', error: error.message });
+    }
+});
+
 // ✅ Reports Endpoints
 // Endpoint สำหรับส่งรายงานปัญหา
 app.post('/api/reports', async (req, res) => {
@@ -407,6 +497,8 @@ app.post('/api/reports', async (req, res) => {
         res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 });
+
+
 
 // เริ่มต้นเซิร์ฟเวอร์
 app.listen(port, () => {

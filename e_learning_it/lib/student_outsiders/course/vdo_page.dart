@@ -1,8 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+
+// 💡 คลาส: สำหรับเก็บข้อมูลความคืบหน้า (Progress Node)
+class VideoProgress {
+  final String courseId;
+  final String userId;
+  final int lessonId;
+  final Duration savedPosition;
+  final String status; // 'เรียนต่อ', 'เรียนใหม่' หรือ 'เรียนจบ'
+
+  VideoProgress({
+    required this.courseId,
+    required this.userId,
+    required this.lessonId,
+    required this.savedPosition,
+    required this.status,
+  });
+
+  // ใช้สำหรับส่งข้อมูลไป API (ปรับ key ให้ตรงกับ Node.js API)
+  Map<String, dynamic> toJson() {
+    return {
+      'courseId': courseId,
+      'userId': userId,
+      'lessonId': lessonId,
+      'savedSeconds': savedPosition.inSeconds, // ส่งเป็นวินาที
+      'courseStatus': status,
+    };
+  }
+}
 
 // คลาส Lesson
 class Lesson {
@@ -25,12 +55,16 @@ class VdoPage extends StatefulWidget {
   final String courseId;
   final String userId;
   final List<Lesson> lessons;
+  final int initialLessonIndex;
+  final int initialSavedSeconds;
 
   const VdoPage({
     Key? key,
     required this.courseId,
     required this.userId,
     required this.lessons,
+    this.initialLessonIndex = 0,
+    this.initialSavedSeconds = 0,
   }) : super(key: key);
 
   @override
@@ -41,23 +75,71 @@ class _VdoPageState extends State<VdoPage> {
   late VideoPlayerController _controller;
   int _currentVideoIndex = 0;
   bool _isControllerInitialized = false;
-  // bool _showControls = true; // ✅ ไม่ต้องใช้แล้ว
-  // Timer? _timer; // ✅ ไม่ต้องใช้แล้ว
-  final Set<int> _completedVideos = {}; 
+  // 💡 Note: ในความเป็นจริง ควรดึงข้อมูล _completedVideos จาก API ด้วย
+  final Set<int> _completedVideos = {0};
   bool _isFullScreen = false;
+
+  // 💡 ตัวแปรที่ถูกลบ/ปรับปรุง (ไม่ใช้ _initialSeekSeconds แล้ว ใช้ parameter ใน _initializeVideoPlayer แทน)
+
+  // 💡 URL สำหรับเชื่อมต่อ API Node.js ของคุณ (POST)
+  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
+  final String _apiUrl = 'http://localhost:3006/api/save_progress'; 
+
+  // 💡 [NEW] URL สำหรับดึงความคืบหน้า (GET)
+  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
+  final String _apiGetUrl = 'http://localhost:3006/api/get_progress'; 
+
+  // 💡 เพิ่มตัวแปรสำหรับ Timer เพื่อบันทึกความคืบหน้าเป็นระยะ
+  Timer? _saveProgressTimer;
 
   @override
   void initState() {
     super.initState();
+
+    _currentVideoIndex = widget.initialLessonIndex;
+    
     if (widget.lessons.isNotEmpty) {
-      _initializeVideoPlayer(_currentVideoIndex);
+      // 💡 [MODIFIED] เริ่มวิดีโอแรกด้วยค่า initialSavedSeconds ที่ส่งมา
+      _initializeVideoPlayer(_currentVideoIndex, savedSeconds: widget.initialSavedSeconds);
     }
   }
 
-  void _initializeVideoPlayer(int index) async {
+  // 💡 [NEW FUNCTION] ดึงตำแหน่งที่บันทึกไว้สำหรับบทเรียนนั้นๆ
+  Future<int> _fetchSavedProgress(String courseId, String userId, int lessonId) async {
+    // ใช้ query parameters เพื่อส่งข้อมูลไปยัง API
+    final uri = Uri.parse('$_apiGetUrl?courseId=$courseId&userId=$userId&lessonId=$lessonId');
+    
+    try {
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        // 💡 สมมติว่า API คืนค่าเป็น JSON object ที่มี key "savedSeconds"
+        // และใช้ ?? 0 เพื่อให้แน่ใจว่าได้ค่า integer หรือ 0 หากไม่พบข้อมูล
+        final int savedSeconds = data['savedSeconds'] as int? ?? 0;
+        print('✅ Progress fetched for lesson $lessonId: $savedSeconds seconds.');
+        return savedSeconds;
+      } else {
+        print('❌ Failed to fetch progress. Status: ${response.statusCode}, Body: ${response.body}');
+        return 0;
+      }
+    } catch (e) {
+      print('🌐 Error fetching progress from API: $e');
+      return 0;
+    }
+  }
+
+
+  // 💡 [MODIFIED FUNCTION] รับ savedSeconds เพื่อใช้ในการ seek
+  void _initializeVideoPlayer(int index, {int savedSeconds = 0}) async {
+    // 💡 หยุด Timer เก่าก่อนเริ่มวิดีโอใหม่
+    _saveProgressTimer?.cancel();
+
     if (_isControllerInitialized) {
+      // 💡 บันทึกความคืบหน้าของวิดีโอเดิม ก่อนจะเปลี่ยน
+      await _saveVideoProgress();
       await _controller.dispose();
-      _isControllerInitialized = false; 
+      _isControllerInitialized = false;
     }
 
     if (widget.lessons.isEmpty || widget.lessons[index].videoUrl == null) {
@@ -72,69 +154,129 @@ class _VdoPageState extends State<VdoPage> {
       ..initialize().then((_) {
         setState(() {
           _isControllerInitialized = true;
-          // _showControls = true; // ✅ ไม่ต้องกำหนดอีกแล้ว
         });
+
+        // 💡 [MODIFIED LOGIC] ใช้ savedSeconds ที่ส่งมา (จากการ fetch หรือ initial)
+        if (savedSeconds > 0) {
+          print('💡 Seeking to: $savedSeconds seconds.');
+          _controller.seekTo(Duration(seconds: savedSeconds));
+        }
+
         _controller.play();
-        // _startHideControlsTimer(); // ✅ ลบออก
+
+        // 💡 เริ่ม Timer เพื่อบันทึกความคืบหน้าทุก 10 วินาที
+        _saveProgressTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+          _saveVideoProgress();
+        });
+
       }).catchError((error) {
         print('Error initializing video: $error');
         setState(() {
           _isControllerInitialized = false;
         });
+        // 💡 แสดง SnackBar แจ้งผู้ใช้เมื่อเกิดข้อผิดพลาด
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('เกิดข้อผิดพลาดในการโหลดวิดีโอ')),
+        );
       });
 
     _controller.addListener(() {
       if (mounted && _controller.value.isInitialized) {
-        setState(() {}); 
-        if (_controller.value.position >= _controller.value.duration && !_completedVideos.contains(_currentVideoIndex)) {
+        // 💡 ตรวจสอบและบันทึกวิดีโอที่จบแล้ว
+        if (_controller.value.position >= _controller.value.duration &&
+            _controller.value.duration > Duration.zero &&
+            !_completedVideos.contains(_currentVideoIndex)) {
+
           setState(() {
             _completedVideos.add(_currentVideoIndex);
-            // _showControls = true; // ✅ ไม่ต้องกำหนดอีกแล้ว
+            // ปลดล็อกวิดีโอถัดไป
+            if (_currentVideoIndex + 1 < widget.lessons.length) {
+              _completedVideos.add(_currentVideoIndex + 1);
+            }
           });
+          _saveVideoProgress(isCompleted: true); // บันทึกสถานะจบวิดีโอ
         }
+
+        setState(() {}); // เพื่ออัปเดต UI เช่น progress bar
       }
     });
   }
 
-  // ✅ ลบเมธอดที่เกี่ยวข้องกับการซ่อน/แสดงแถบควบคุม
-  /*
-  void _startHideControlsTimer() {
-    _timer?.cancel();
-    if (_isControllerInitialized && _controller.value.isPlaying) {
-      _timer = Timer(const Duration(seconds: 3), () {
-        if (mounted) {
-          setState(() {
-            _showControls = false;
-          });
-        }
-      });
-    }
-  }
+  // 💡 ฟังก์ชันที่แก้ไข: บันทึกความคืบหน้าของวิดีโอไปยัง API (ไม่มีการเปลี่ยนแปลงจากก่อนหน้า)
+  Future<void> _saveVideoProgress({bool isCompleted = false}) async {
+    if (!_isControllerInitialized || !mounted || widget.lessons.isEmpty) return;
 
-  void _toggleControlsVisibility() {
-    setState(() {
-      _showControls = !_showControls;
-    });
-    if (_showControls && _isControllerInitialized && _controller.value.isPlaying) {
-      _startHideControlsTimer();
+    final Lesson currentLesson = widget.lessons[_currentVideoIndex];
+    final Duration savedPosition = _controller.value.position;
+    final Duration totalDuration = _controller.value.duration;
+
+    String status;
+    if (isCompleted || savedPosition >= totalDuration) {
+      status = 'เรียนจบ';
+    } else if (savedPosition > const Duration(seconds: 5)) {
+      status = 'เรียนต่อ';
     } else {
-      _timer?.cancel();
+      status = 'เรียนใหม่';
+    }
+
+    final VideoProgress progressNode = VideoProgress(
+      courseId: widget.courseId,
+      userId: widget.userId,
+      lessonId: currentLesson.id,
+      savedPosition: savedPosition,
+      status: status,
+    );
+
+    final apiBody = progressNode.toJson();
+
+    try {
+      final response = await http.post(
+        Uri.parse(_apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(apiBody),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Progress saved successfully to API for lesson ${apiBody['lessonId']}: ${apiBody['savedSeconds']}s, Status: $status');
+      } else {
+        print('❌ Failed to save progress. Status: ${response.statusCode}, Body: ${response.body}');
+      }
+    } catch (e) {
+      print('🌐 Error sending progress to API: $e');
     }
   }
-  */
 
-  void _playVideo(int index) {
-    if (_currentVideoIndex != index) {
-      final bool isPreviousVideoCompleted = _completedVideos.contains(index - 1);
-      final bool isFirstVideo = index == 0;
-      final bool isViewingPreviousVideo = index < _currentVideoIndex;
-      
-      if (isFirstVideo || isViewingPreviousVideo || isPreviousVideoCompleted) {
+
+  // 💡 [MODIFIED FUNCTION] ดึงความคืบหน้าก่อนเล่นวิดีโอ
+  void _playVideo(int index) async { // 💡 ต้องเป็น async
+    final bool isUnlocked = index == 0 || _completedVideos.contains(index - 1);
+
+    if (isUnlocked) {
+      if (_currentVideoIndex != index) {
+
+        // 💡 [NEW LOGIC] ดึงข้อมูลความคืบหน้าของบทเรียนใหม่
+        final Lesson newLesson = widget.lessons[index];
+        final int savedPosition = await _fetchSavedProgress(
+          widget.courseId, 
+          widget.userId, 
+          newLesson.id
+        );
+
         setState(() {
           _currentVideoIndex = index;
         });
-        _initializeVideoPlayer(index);
+
+        // 💡 ส่ง savedPosition ที่ดึงมาให้ initializer
+        _initializeVideoPlayer(index, savedSeconds: savedPosition);
       }
+    } else {
+      // 💡 แสดง SnackBar แจ้งเตือนเมื่อวิดีโอยังไม่ถูกปลดล็อก
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาดูวิดีโอก่อนหน้าให้จบก่อนจึงจะดูวิดีโอนี้ได้'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -153,14 +295,12 @@ class _VdoPageState extends State<VdoPage> {
       }
 
       _controller.seekTo(clampedPosition);
-      // _startHideControlsTimer(); // ✅ ลบออก
     }
   }
 
   void _setPlaybackSpeed(double speed) {
     if (_isControllerInitialized && _controller.value.isInitialized) {
       _controller.setPlaybackSpeed(speed);
-      // _startHideControlsTimer(); // ✅ ลบออก
     }
   }
 
@@ -183,9 +323,47 @@ class _VdoPageState extends State<VdoPage> {
     }
   }
 
+  Future<bool> _onBackPressed() async {
+    if (_isFullScreen) {
+      _toggleFullScreen();
+      return false;
+    }
+
+    final bool? shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('ยืนยันการกลับ'),
+          content: const Text('ต้องการบันทึกความคืบหน้าและกลับไปหน้าก่อนหรือไม่?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('ยกเลิก'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('ตกลง'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldPop == false || shouldPop == null) {
+      return false;
+    }
+
+    await _saveVideoProgress();
+    return true;
+  }
+
   @override
   void dispose() {
-    // _timer?.cancel(); // ✅ ลบออก
+    // 💡 หยุด Timer ก่อน dispose เพื่อป้องกันการเรียกใช้หลังจาก widget หายไป
+    _saveProgressTimer?.cancel();
+
+    // 💡 บันทึกความคืบหน้าครั้งสุดท้ายก่อน dispose
+    _saveVideoProgress();
     if (_isControllerInitialized) {
       _controller.dispose();
     }
@@ -198,14 +376,18 @@ class _VdoPageState extends State<VdoPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _isFullScreen ? null : AppBar(
-        title: const Text('หน้าเรียนวิดีโอ'),
-        backgroundColor: const Color(0xFF2E7D32),
-      ),
-      body: _isFullScreen
-          ? _buildVideoPlayerSection(context)
-          : LayoutBuilder(
+    if (_isFullScreen) {
+      return Scaffold(body: _buildVideoPlayerSection(context));
+    }
+
+    return WillPopScope(
+      onWillPop: _onBackPressed,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('หน้าเรียนวิดีโอ'),
+          backgroundColor: const Color(0xFF2E7D32),
+        ),
+        body: LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 800) {
                   return SingleChildScrollView(
@@ -214,7 +396,7 @@ class _VdoPageState extends State<VdoPage> {
                       children: [
                         _buildVideoPlayerSection(context),
                         if (widget.lessons.isNotEmpty) ...[
-                          _buildCurrentVideoHeader(), 
+                          _buildCurrentVideoHeader(),
                           _buildVideoInfoAndFiles(),
                           const Divider(height: 1),
                           Padding(
@@ -226,20 +408,20 @@ class _VdoPageState extends State<VdoPage> {
                     ),
                   );
                 }
-                
+
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       flex: 3,
-                      child: SingleChildScrollView( 
+                      child: SingleChildScrollView(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _buildVideoPlayerSection(context),
                             if (widget.lessons.isNotEmpty) ...[
-                              _buildCurrentVideoHeader(), 
-                              _buildVideoInfoAndFiles(), 
+                              _buildCurrentVideoHeader(),
+                              _buildVideoInfoAndFiles(),
                             ],
                           ],
                         ),
@@ -253,6 +435,7 @@ class _VdoPageState extends State<VdoPage> {
                 );
               },
             ),
+      ),
     );
   }
 
@@ -260,7 +443,7 @@ class _VdoPageState extends State<VdoPage> {
 
   Widget _buildCurrentVideoHeader() {
     final currentLesson = widget.lessons[_currentVideoIndex];
-    
+
     return Padding(
       padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0),
       child: Column(
@@ -275,18 +458,17 @@ class _VdoPageState extends State<VdoPage> {
             currentLesson.videoDescription,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
-          const Divider(height: 32), 
+          const Divider(height: 32),
         ],
       ),
     );
   }
 
   Widget _buildVideoPlayerSection(BuildContext context) {
-    // ✅ ส่วนที่ถูกแก้ไข
     return Container(
       color: Colors.black,
       width: _isFullScreen ? MediaQuery.of(context).size.width : double.infinity,
-      height: _isFullScreen ? MediaQuery.of(context).size.height : 450, // ✅ กำหนดความสูงคงที่
+      height: _isFullScreen ? MediaQuery.of(context).size.height : 450,
       child: Stack(
         alignment: Alignment.center,
         children: <Widget>[
@@ -294,10 +476,9 @@ class _VdoPageState extends State<VdoPage> {
             VideoPlayer(_controller)
           else
             const Center(child: CircularProgressIndicator(color: Colors.white)),
-          
+
           if (_isControllerInitialized && _controller.value.isInitialized)
-            // ✅ แถบควบคุมที่แสดงตลอดเวลา
-            Positioned( 
+            Positioned(
               bottom: 0,
               left: 0,
               right: 0,
@@ -313,40 +494,38 @@ class _VdoPageState extends State<VdoPage> {
     if (!_isControllerInitialized || !_controller.value.isInitialized) {
       return const SizedBox.shrink();
     }
-    
+
     return Container(
       color: Colors.black54,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           VideoProgressIndicator(
-            _controller, 
-            allowScrubbing: true, 
-            colors: const VideoProgressColors(playedColor: Colors.red, bufferedColor: Colors.white54), 
+            _controller,
+            allowScrubbing: true,
+            colors: const VideoProgressColors(playedColor: Colors.red, bufferedColor: Colors.white54),
           ),
-          
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
                   icon: const Icon(Icons.replay_10, color: Colors.white, size: 28),
                   onPressed: () {
                     _seek(-10);
-                    // _startHideControlsTimer(); // ✅ ลบออก
                   },
                 ),
                 IconButton(
                   icon: Icon(
-                    _controller.value.isPlaying ? Icons.pause : Icons.play_arrow, 
-                    color: Colors.white, 
+                    _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
                     size: 36
                   ),
                   onPressed: () {
                     setState(() {
                       _controller.value.isPlaying ? _controller.pause() : _controller.play();
-                      // _startHideControlsTimer(); // ✅ ลบออก
                     });
                   },
                 ),
@@ -354,21 +533,20 @@ class _VdoPageState extends State<VdoPage> {
                   icon: const Icon(Icons.forward_10, color: Colors.white, size: 28),
                   onPressed: () {
                     _seek(10);
-                    // _startHideControlsTimer(); // ✅ ลบออก
                   },
                 ),
                 Text(
                   '${_printDuration(_controller.value.position)} / ${_printDuration(_controller.value.duration)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13), 
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
-                
-                const Spacer(), 
+
+                const Spacer(),
 
                 Row(
                   children: [
                     PopupMenuButton<double>(
                       initialValue: _controller.value.playbackSpeed,
-                      onSelected: _setPlaybackSpeed, 
+                      onSelected: _setPlaybackSpeed,
                       itemBuilder: (context) => [
                         for (final speed in [0.5, 1.0, 1.5, 2.0])
                           PopupMenuItem(
@@ -419,7 +597,7 @@ class _VdoPageState extends State<VdoPage> {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
-          isMobile 
+          isMobile
             ? ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -436,12 +614,12 @@ class _VdoPageState extends State<VdoPage> {
       ),
     );
   }
-  
+
   Widget _buildLessonListItem(BuildContext context, int index) {
     final lesson = widget.lessons[index];
     final bool isCurrent = _currentVideoIndex == index;
-    final bool isUnlocked = index == 0 || _completedVideos.contains(index - 1); 
-    
+    final bool isUnlocked = index == 0 || _completedVideos.contains(index - 1);
+
     return Opacity(
       opacity: isUnlocked ? 1.0 : 0.5,
       child: Card(
@@ -450,7 +628,9 @@ class _VdoPageState extends State<VdoPage> {
         color: isCurrent ? Colors.lightGreen.shade50 : Colors.white,
         child: ListTile(
           leading: Icon(
-            isUnlocked ? (isCurrent ? Icons.play_circle_fill : Icons.check_circle) : Icons.lock,
+            isUnlocked
+              ? (_completedVideos.contains(index) ? Icons.check_circle : Icons.play_circle_fill)
+              : Icons.lock,
             color: isCurrent ? const Color(0xFF2E7D32) : (isUnlocked ? Colors.lightGreen : Colors.grey),
           ),
           title: Text(
@@ -474,7 +654,7 @@ class _VdoPageState extends State<VdoPage> {
     }
 
     final currentLesson = widget.lessons[_currentVideoIndex];
-    
+
     return Padding(
       padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
       child: Column(
@@ -487,7 +667,7 @@ class _VdoPageState extends State<VdoPage> {
           const SizedBox(height: 8),
           if (currentLesson.pdfUrl != null)
             ListTile(
-              contentPadding: EdgeInsets.zero, 
+              contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
               title: Text(currentLesson.pdfUrl!.split('/').last),
               onTap: () async {
