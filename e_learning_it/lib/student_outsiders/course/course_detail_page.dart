@@ -1,16 +1,9 @@
-// CourseDetailPage.dart
 import 'package:flutter/material.dart';
-// ต้องเพิ่ม import สำหรับ HTTP และ JSON
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
 import 'package:e_learning_it/student_outsiders/course/vdo_page.dart';
-import 'package:e_learning_it/student_outsiders/drawer_page.dart';
-import 'package:e_learning_it/student_outsiders/navbar_normal.dart';
 
-// Class Course และ Lesson (ใช้โครงสร้างเดิม แต่ต้องมั่นใจว่า Lesson ถูก Import หรือ Define)
-
-// สมมติว่า Lesson ถูก Import จาก vdo_page.dart แล้ว
-// class Lesson { ... }
 
 class Course {
   final String courseId;
@@ -41,7 +34,7 @@ class Course {
     var lessonsList = json['lessons'] as List<dynamic>? ?? [];
     List<Lesson> parsedLessons = lessonsList.map((lessonJson) {
       return Lesson(
-        id: int.tryParse(lessonJson['video_lesson_id']?.toString() ?? '0') ?? 0, 
+        id: int.tryParse(lessonJson['lesson_id']?.toString() ?? '0') ?? 0,
         videoName: lessonJson['video_name'] ?? '',
         videoDescription: lessonJson['video_description'] ?? '',
         videoUrl: lessonJson['video_url'],
@@ -64,7 +57,18 @@ class Course {
   }
 }
 
-// 💡 เปลี่ยนจาก StatelessWidget เป็น StatefulWidget
+// 💡 NEW CLASS: สำหรับรวมผลลัพธ์ของ Future 2 ตัว
+class CourseProgressData {
+  final Map<String, dynamic> progress;
+  final bool hasRated;
+
+  CourseProgressData({
+    required this.progress,
+    required this.hasRated,
+  });
+}
+
+
 class CourseDetailPage extends StatefulWidget {
   final Course course;
   final String userName;
@@ -82,34 +86,84 @@ class CourseDetailPage extends StatefulWidget {
 }
 
 class _CourseDetailPageState extends State<CourseDetailPage> {
-  // 💡 URL สำหรับดึงข้อมูลความคืบหน้า (เปลี่ยน IP/Port ให้ถูกต้อง)
-  final String _apiGetProgressUrl = 'http://192.168.x.x:3006/api/get_progress'; 
+  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
+  // ตรวจสอบว่า IP/Port นี้สามารถเชื่อมต่อกับ Node.js ได้จริง
+  final String _apiUrlBase = 'http://localhost:3006/api'; 
+  
+  late Future<CourseProgressData> _courseStatusFuture;
 
-  // 💡 ฟังก์ชันใหม่: ดึงความคืบหน้าล่าสุด
+  @override
+  void initState() {
+    super.initState();
+    _courseStatusFuture = _fetchCombinedCourseStatus();
+  }
+
+  // 💡 [CRITICAL FIX] ดึงสถานะการให้คะแนนจาก course_ratings ให้ตรงกับ Node.js API (Endpoint 8)
+  Future<bool> _fetchCourseRatingStatus() async {
+    try {
+      // 🎯 URL ต้องตรงกับ Node.js Endpoint ที่ 8: /api/check_user_rating/:userId/:courseId
+      final url = '$_apiUrlBase/check_user_rating/${widget.userId}/${widget.course.courseId}';
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      // Node.js API ส่ง 200 ถ้าพบ rating และ 404 ถ้าไม่พบ
+      if (response.statusCode == 200) {
+        // Status 200 = User ได้ให้คะแนนคอร์สนี้แล้ว
+        return true; 
+      } else if (response.statusCode == 404) {
+        // Status 404 = User ยังไม่ได้ให้คะแนนคอร์สนี้
+        return false; 
+      } 
+      
+      // สำหรับ Status Code อื่นๆ (เช่น 500)
+      return false;
+
+    } catch (e) {
+      print('Network error fetching rating status: $e');
+      return false;
+    }
+  }
+
+  // 💡 NEW FUNCTION: ดึงสถานะความคืบหน้า + สถานะการให้คะแนน
+  Future<CourseProgressData> _fetchCombinedCourseStatus() async {
+    final progress = await _fetchLastProgress();
+    final hasRated = await _fetchCourseRatingStatus();
+    return CourseProgressData(progress: progress, hasRated: hasRated);
+  }
+
+  // 💡 MODIFIED FUNCTION: ดึงความคืบหน้าล่าสุด 
   Future<Map<String, dynamic>> _fetchLastProgress() async {
-    // กำหนดค่าเริ่มต้น
     Map<String, dynamic> defaultProgress = {
-      'lessonId': 0, // 0 หมายถึง Lesson ID เริ่มต้น
+      'lessonId': 0,
       'savedSeconds': 0,
       'courseStatus': 'เรียนใหม่',
     };
-    
-    // หากไม่มีบทเรียนเลย ให้คืนค่าเริ่มต้น
+
     if (widget.course.lessons.isEmpty) return defaultProgress;
 
     try {
+      final url = '$_apiUrlBase/get_progress/${widget.userId}/${widget.course.courseId}';
       final response = await http.get(
-        // ส่ง userId และ courseId เพื่อขอข้อมูล progress
-        Uri.parse('$_apiGetProgressUrl/${widget.userId}/${widget.course.courseId}'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
       );
-      
+
+      final data = json.decode(response.body);
+
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['progress'] ?? defaultProgress;
+        final progress = data['progress'] ?? defaultProgress;
+
+        final lessonId = progress['lessonId'] as int?;
+        if (lessonId != null && widget.course.lessons.any((l) => l.id == lessonId)) {
+            return progress;
+        }
+        return defaultProgress;
+
       } else if (response.statusCode == 404) {
-        // ยังไม่เคยดูเลย (API Node.js ส่ง 404 กลับมา)
-        return defaultProgress; 
+        return defaultProgress;
       } else {
         print('Error fetching progress: ${response.statusCode}, Body: ${response.body}');
         return defaultProgress;
@@ -120,27 +174,141 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
     }
   }
 
-  // 💡 ฟังก์ชันใหม่: นำทางไปหน้าวิดีโอ
+  // 💡 FIXED FUNCTION: ฟังก์ชันส่งคะแนนไปยัง API
+  Future<void> _submitRating(int rating) async {
+    try {
+      // 🎯 URL ตรงกับ Node.js Endpoint ที่ 7: /api/rate_course
+      final response = await http.post(
+        Uri.parse('$_apiUrlBase/rate_course'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'courseId': widget.course.courseId,
+          'userId': widget.userId,
+          'rating': rating,
+          'review_text': '', 
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ บันทึกคะแนนเรียบร้อยแล้ว ปุ่มเปลี่ยนเป็น "ทบทวน"')),
+        );
+        // ✅ [CRITICAL FIX] เรียก setState เพื่อเรียก FutureBuilder ใหม่ทันที
+        setState(() {
+          _courseStatusFuture = _fetchCombinedCourseStatus(); // รีเฟรช Future
+        }); 
+      } else {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ ไม่สามารถบันทึกคะแนนได้. Status: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      print('Network error submitting rating: $e');
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🌐 เกิดข้อผิดพลาดในการเชื่อมต่อ')),
+      );
+    }
+  }
+
+  // 💡 FIXED FUNCTION: ฟังก์ชันแสดง Dialog การให้คะแนน
+  void _showRatingDialog(BuildContext context) async {
+    int _currentRating = 0;
+
+    final int? selectedRating = await showDialog<int>( 
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('ให้คะแนนคอร์ส'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('คุณให้คะแนนคอร์สนี้กี่ดาว?'),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return IconButton(
+                        icon: Icon(
+                          Icons.star,
+                          color: index < _currentRating ? Colors.amber : Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _currentRating = index + 1;
+                          });
+                        },
+                      );
+                    }),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null), 
+                  child: const Text('ยกเลิก'),
+                ),
+                ElevatedButton(
+                  onPressed: _currentRating > 0
+                      ? () {
+                          Navigator.of(context).pop(_currentRating); 
+                        }
+                      : null,
+                  child: const Text('ส่งคะแนน'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    );
+    
+    // 2. ตรวจสอบว่ามีคะแนนที่เลือกหรือไม่
+    if (selectedRating != null && selectedRating > 0) {
+      // 3. เรียกฟังก์ชันส่งคะแนน ซึ่งจะเรียก setState ภายใน
+      await _submitRating(selectedRating);
+    }
+  }
+
+  // 💡 FIXED FUNCTION: นำทางไปหน้าวิดีโอ
   void _navigateToVideoPage(BuildContext context, Map<String, dynamic> progress) async {
-    int startLessonIndex = 0;
+    int startLessonIndex = 0; 
     int startSavedSeconds = progress['savedSeconds'] ?? 0;
     String status = progress['courseStatus'] ?? 'เรียนใหม่';
-    
-    // หากสถานะคือ 'เรียนต่อ' ให้นำทางไปยังบทเรียนที่ค้างไว้
-    if (status == 'เรียนต่อ' && progress['lessonId'] != null) {
-        final lastLessonId = progress['lessonId'];
-        
-        // ค้นหา index ของ Lesson ที่บันทึกไว้ใน List
-        final index = widget.course.lessons.indexWhere((l) => l.id == lastLessonId);
-        if (index != -1) {
-            startLessonIndex = index;
-        }
-    } else {
-        // ถ้า status คือ 'เรียนใหม่' หรือหา Lesson ID ไม่เจอ ให้เริ่มจากบทแรก
-        startSavedSeconds = 0;
-    }
 
-    // นำทางไป VdoPage
+    if (widget.course.lessons.isEmpty) return;
+
+    final lastLessonId = progress['lessonId'] as int?;
+    final lastLessonIndex = lastLessonId != null
+        ? widget.course.lessons.indexWhere((l) => l.id == lastLessonId)
+        : -1;
+
+    // หากเป็นสถานะ 'ทบทวน' หรือ 'เรียนใหม่' ให้เริ่มที่บทเรียนแรก
+    if (status == 'เรียนใหม่' || status == 'ทบทวน') {
+      startLessonIndex = 0;
+      startSavedSeconds = 0;
+    } 
+    // หากเป็น 'เรียนต่อ' หรือ 'เรียนจบ' (แต่ยังไม่จบบทสุดท้าย)
+    else if (lastLessonIndex != -1) {
+      if (status == 'เรียนต่อ') {
+        startLessonIndex = lastLessonIndex;
+      } else if (status == 'เรียนจบ') {
+        if (lastLessonIndex + 1 < widget.course.lessons.length) {
+          // ไปบทถัดไป
+          startLessonIndex = lastLessonIndex + 1;
+          startSavedSeconds = 0;
+        } else {
+          // จบทุกบทเรียนแล้ว
+          startLessonIndex = 0;
+          startSavedSeconds = 0;
+        }
+      }
+    } 
+
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -148,30 +316,33 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
           courseId: widget.course.courseId,
           userId: widget.userId,
           lessons: widget.course.lessons,
-          initialLessonIndex: startLessonIndex, // เริ่มที่วิดีโอที่ควรเรียนต่อ
-          initialSavedSeconds: startSavedSeconds, // เริ่มที่เวลาที่บันทึกไว้
+          initialLessonIndex: startLessonIndex,
+          initialSavedSeconds: startSavedSeconds,
         ),
       ),
     );
-    
-    // เมื่อกลับมาจาก VdoPage ให้รีเฟรชหน้า CourseDetailPage เพื่ออัปเดตปุ่ม "เริ่ม/เรียนต่อ"
-    setState(() {});
+
+    // เมื่อกลับมาจาก VdoPage ให้รีเฟรชหน้า CourseDetailPage
+    setState(() {
+      _courseStatusFuture = _fetchCombinedCourseStatus(); // รีเฟรช Future
+    });
   }
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: NavbarPage(userName: widget.userName, userId: widget.userId),
-      drawer: DrawerPage(userName: widget.userName, userId: widget.userId),
+      appBar: AppBar(
+        title: Text(widget.course.courseName),
+        backgroundColor: const Color(0xFF2E7D32),
+      ),
       body: Stack(
         children: [
           SingleChildScrollView(
-            // ... (โค้ด SingleChildScrollView เดิม)
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ส่วนหัวหลักสูตร (คงเดิม)
+                // ... (ส่วนหัวหลักสูตรและรูปภาพ) ...
                 Container(
                   height: 200,
                   width: double.infinity,
@@ -205,55 +376,95 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                // ส่วน Tabs และเนื้อหา
                 _buildTabsAndContent(context),
+                const SizedBox(height: 100),
               ],
             ),
           ),
-          
-          // 💡 ปุ่ม "เริ่ม" ที่ถูกห่อด้วย FutureBuilder
+
+          // 💡 ปุ่ม "เริ่ม"
           Align(
             alignment: Alignment.bottomRight,
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: _fetchLastProgress(), // 💡 เรียก API เพื่อดึงความคืบหน้า
-              builder: (context, snapshot) {
-                String buttonText = 'เริ่มเรียน';
-                Map<String, dynamic> progressData = snapshot.data ?? {'courseStatus': 'เรียนใหม่'};
-                
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  buttonText = 'กำลังโหลด...';
-                } else if (snapshot.hasData) {
-                  if (progressData['courseStatus'] == 'เรียนต่อ') {
-                    buttonText = 'เรียนต่อ';
-                  } else if (progressData['courseStatus'] == 'เรียนใหม่' && progressData['savedSeconds'] > 0) {
-                     // อาจจะมี savedSeconds > 0 แต่สถานะเป็นเรียนใหม่ แสดงว่าดูจบแล้ว
-                     buttonText = 'ทบทวน';
-                  }
-                }
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24.0, right: 16.0),
+              child: FutureBuilder<CourseProgressData>(
+                future: _courseStatusFuture, // ใช้ Future ตัวใหม่
+                builder: (context, snapshot) {
+                  String buttonText = 'เริ่มเรียน';
+                  bool isButtonEnabled = true;
+                  Map<String, dynamic> progressData = {'courseStatus': 'เรียนใหม่', 'lessonId': 0, 'savedSeconds': 0};
+                  bool hasRated = false;
 
-                return Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: ElevatedButton(
-                    onPressed: snapshot.connectionState == ConnectionState.done && widget.course.lessons.isNotEmpty
-                        ? () => _navigateToVideoPage(context, progressData)
-                        : null, // ปิดการใช้งานปุ่มระหว่างโหลด
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    buttonText = 'กำลังโหลด...';
+                    isButtonEnabled = false;
+                  } else if (widget.course.lessons.isEmpty) {
+                    buttonText = 'ไม่มีบทเรียน';
+                    isButtonEnabled = false;
+                  } else if (snapshot.hasError) {
+                    // จัดการข้อผิดพลาดในการโหลดข้อมูล (เช่น API Down)
+                    print('Error loading course status: ${snapshot.error}');
+                    buttonText = 'มีข้อผิดพลาด';
+                    isButtonEnabled = false;
+                  } else if (snapshot.hasData) {
+                    progressData = snapshot.data!.progress;
+                    hasRated = snapshot.data!.hasRated; // สถานะการให้คะแนน
+
+                    final status = progressData['courseStatus'];
+                    final lastLessonId = progressData['lessonId'] as int?;
+
+                    final isLastLessonInCourse = lastLessonId != null &&
+                        widget.course.lessons.isNotEmpty &&
+                        lastLessonId == widget.course.lessons.last.id;
+
+
+                    // 1. ตรวจสอบ "course_ratings": ถ้ามีคะแนนแล้ว ให้เป็น "ทบทวน" ทันที
+                    if (hasRated) { 
+                      buttonText = 'ทบทวน';
+                    }
+                    // 2. ตรวจสอบ "video_progress" (สถานะ "เรียนจบ" + บทเรียนสุดท้าย + ยังไม่ได้ให้คะแนน)
+                    else if (status == 'เรียนจบ' && isLastLessonInCourse && !hasRated) {
+                      buttonText = 'ให้คะแนนคอร์ส';
+                    }
+                    // 3. ตรวจสอบ "video_progress" (สถานะ "เรียนต่อ" หรือ "เรียนจบ" แต่ยังไม่จบบทสุดท้าย)
+                    else if (status == 'เรียนต่อ' || (status == 'เรียนจบ' && !isLastLessonInCourse)) {
+                      buttonText = 'เรียนต่อ';
+                    } 
+                    // 4. สถานะ: เริ่มเรียน (ยังไม่เคยดูเลย)
+                    else { 
+                      buttonText = 'เริ่มเรียน';
+                    }
+                  }
+
+                  // กำหนด Action ของปุ่ม
+                  final VoidCallback? onPressedAction;
+                  if (!isButtonEnabled) {
+                    onPressedAction = null;
+                  } else if (buttonText == 'ให้คะแนนคอร์ส') {
+                    onPressedAction = () => _showRatingDialog(context);
+                  } else {
+                    onPressedAction = () => _navigateToVideoPage(context, progressData);
+                  }
+
+                  final buttonColor = buttonText == 'ให้คะแนนคอร์ส'
+                      ? Colors.amber[700]
+                      : const Color(0xFF2E7D32);
+
+                  return ElevatedButton(
+                    onPressed: onPressedAction,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                      backgroundColor: buttonColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      elevation: 5,
                     ),
-                    child: Text(
-                      buttonText,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                );
-              },
+                    child: Text(buttonText, style: const TextStyle(fontSize: 18, color: Colors.white)),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -261,98 +472,127 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
     );
   }
 
-  // ... (โค้ด _buildTabsAndContent, _buildDetailsTab, _buildDetailSection, _buildTabContent, _buildFileListView เดิม)
-  
   Widget _buildTabsAndContent(BuildContext context) {
     return DefaultTabController(
-      length: 3,
-      child: Column(
-        children: [
-          const TabBar(
-            indicatorColor: Color(0xFF2E7D32),
-            labelColor: Color(0xFF2E7D32),
-            unselectedLabelColor: Colors.black54,
-            tabs: [
-              Tab(text: 'รายละเอียด'),
-              Tab(text: 'วุฒิบัตร'),
-              Tab(text: 'ผู้สอน'),
+    length: 3,
+    child: Column(
+      children: [
+
+        const TabBar(
+          labelColor: const Color(0xFF2E7D32), // สีเข้ม (สีเดียวกับ AppBar)
+          labelStyle: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+          ),
+
+          tabs: [
+            Tab(text: 'รายละเอียด'),
+            Tab(text: 'วุฒิบัตร'),
+            Tab(text: 'บทเรียน'),
+          ],
+        ),
+        Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: TabBarView(
+            children: [
+              _buildDetailTab(),
+              _buildCertificateTab(),
+              _buildLessonsTab(),
             ],
           ),
-          SizedBox(
-            height: 600,
-            child: TabBarView(
-              children: [
-                _buildDetailsTab(),
-                _buildTabContent('วุฒิบัตร', 'เนื้อหาเกี่ยวกับวุฒิบัตร'),
-                _buildTabContent('ผู้สอน', widget.course.professorName),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildDetailSection('รายละเอียด', widget.course.description),
-          const SizedBox(height: 24),
-          _buildDetailSection('วัตถุประสงค์', widget.course.objective),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailSection(String title, String content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2E7D32),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          content,
-          style: const TextStyle(fontSize: 16, height: 1.5),
         ),
       ],
-    );
+    ),
+  );
   }
 
-  Widget _buildTabContent(String title, String content) {
+  Widget _buildDetailTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2E7D32),
-            ),
+          // ส่วน คำอธิบายหลักสูตร (รายละเอียด)
+          Row(
+            children: [
+              const Icon(Icons.menu_book, color: Color.fromARGB(255, 87, 87, 87)),
+              const SizedBox(width: 8),
+              Text('คำอธิบายหลักสูตร', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            content,
-            style: const TextStyle(fontSize: 16, height: 1.5),
+          const SizedBox(height: 8),
+          // ใช้ description
+          SelectableText(widget.course.description, style: const TextStyle(fontSize: 16)),
+
+          const Divider(height: 32),
+
+          // ส่วน วัตถุประสงค์การเรียนรู้
+          Row(
+            children: [
+              const Icon(Icons.my_location, color: Color.fromARGB(255, 87, 87, 87)),
+              const SizedBox(width: 8),
+              Text('วัตถุประสงค์การเรียนรู้', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            ],
           ),
+          const SizedBox(height: 8),
+          // ใช้ objective
+          SelectableText(widget.course.objective, style: const TextStyle(fontSize: 16)),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildFileListView(BuildContext context) {
-    return Container();
+  Widget _buildCertificateTab() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.badge, size: 48, color: Colors.blueGrey),
+            SizedBox(height: 10),
+            Text(
+              'ข้อมูลวุฒิบัตร/ใบรับรอง',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+            ),
+            SizedBox(height: 5),
+            Text(
+              'คุณจะได้รับวุฒิบัตรเมื่อเรียนจบคอร์สนี้ครบ 100% และผ่านการทดสอบ (ถ้ามี)',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey)
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  Widget _buildLessonsTab() {
+    return ListView.builder(
+      // กำหนด shrinkWrap และ physics เพื่อให้ทำงานใน TabBarView ได้
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: widget.course.lessons.length,
+      itemBuilder: (context, index) {
+        final lesson = widget.course.lessons[index];
+        return ListTile(
+          leading: const Icon(Icons.video_library),
+          title: Text('ตอนที่ ${index + 1}: ${lesson.videoName}'),
+          subtitle: Text(lesson.videoDescription, maxLines: 1, overflow: TextOverflow.ellipsis),
+          onTap: () {
+            // เมื่อคลิกที่รายการบทเรียน ให้เริ่มดูบทเรียนนั้นตั้งแต่ต้น (ทบทวน)
+              _navigateToVideoPage(context, {
+                'lessonId': lesson.id,
+                'savedSeconds': 0,
+                'courseStatus': 'เรียนใหม่',
+              });
+          },
+        );
+      },
+    );
   }
 }

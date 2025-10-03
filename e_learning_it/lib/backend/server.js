@@ -1,3 +1,5 @@
+// C:\Users\atSine\Desktop\ปัญหาพิเศษ\Web\elearnnig-it\e_learning_it\lib\backend\server.js
+
 // Your existing imports...
 require('dotenv').config({ path: '.env' });
 const express = require('express');
@@ -22,6 +24,8 @@ const UPLOAD_DIR = 'C:\\Users\\atSine\\Desktop\\ปัญหาพิเศษ\\
 // Middleware
 app.use(cors());
 app.use(express.json());
+// 💡 เปลี่ยน hostname เป็น IP Address ของเครื่องคุณ (ถ้ามีปัญหาเรื่องการเข้าถึงจาก Emulator/Device)
+// ตัวอย่าง: app.use('/data', express.static('C:/Users/atSine/Desktop/ปัญหาพิเศษ/Web/data'));
 app.use('/data', express.static(UPLOAD_DIR));
 app.use('/data', express.static(path.join(__dirname, 'data')));
 
@@ -32,6 +36,8 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD,
     port: parseInt(process.env.DB_PORT),
 });
+
+
 
 pool.connect((err, client, done) => {
     if (err) {
@@ -317,7 +323,7 @@ app.get('/api/course/:courseId', async (req, res) => {
                 pdf_url: lesson.pdf_path ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseId}/lessons/lesson_${lessonNumber}/${lesson.pdf_path}` : null,
             };
         });
-        
+
         const imageUrl = courseData.name_image
             ? `http://${req.hostname}:${port}/data/${courseData.user_id}/${courseId}/image/${courseData.name_image}`
             : 'https://placehold.co/600x400.png';
@@ -389,12 +395,12 @@ app.get('/api/course/:courseId/videos', async (req, res) => {
 
 // **ENDPOINT ที่ 3: บันทึกความคืบหน้าการเรียนวิดีโอ (Video Progress)**
 app.post('/api/save_progress', async (req, res) => {
-    const { 
-        userId, 
-        courseId, 
-        lessonId, 
+    const {
+        userId,
+        courseId,
+        lessonId,
         savedSeconds, // เวลาที่ดูค้างไว้ (เป็นวินาที)
-        courseStatus // 'เรียนต่อ' หรือ 'เรียนใหม่'
+        courseStatus // 'เรียนต่อ' หรือ 'เรียนใหม่' หรือ 'เรียนจบ'
     } = req.body;
 
     // ตรวจสอบข้อมูลที่จำเป็น
@@ -402,10 +408,10 @@ app.post('/api/save_progress', async (req, res) => {
         return res.status(400).json({ message: 'Missing required progress data (userId, courseId, lessonId, savedSeconds, courseStatus).' });
     }
 
-    // 💡 การ Log ข้อมูลที่ได้รับจาก Client
     console.log('Received progress data:', req.body);
-    
+
     try {
+        // ใช้ ON CONFLICT เพื่อทำการ Upsert (Insert หรือ Update)
         const query = `
             INSERT INTO video_progress (user_id, course_id, lesson_id, saved_seconds, course_status, updated_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
@@ -417,22 +423,20 @@ app.post('/api/save_progress', async (req, res) => {
             RETURNING *;
         `;
         const values = [userId, courseId, lessonId, savedSeconds, courseStatus];
-        
-        // 💡 การ Log ค่าที่จะส่งเข้า Query
+
         console.log('Query values:', values);
 
         const result = await pool.query(query, values);
 
         console.log(`Progress saved/updated for User ${userId}, Lesson ${lessonId}: ${savedSeconds}s, Status: ${courseStatus}`);
 
-        res.status(200).json({ 
+        res.status(200).json({
             message: 'Video progress saved successfully.',
-            progress: result.rows[0] 
+            progress: result.rows[0]
         });
 
     } catch (error) {
         console.error('🛑 ERROR saving video progress:', error);
-        // รหัส 23503: Foreign Key Violation (เช่น courseId/lessonId ไม่ถูกต้อง)
         if (error.code === '23503') {
             return res.status(404).json({ message: 'Course ID, Lesson ID, หรือ User ID ไม่ถูกต้อง (Foreign Key violation).', error: error.message });
         }
@@ -441,6 +445,7 @@ app.post('/api/save_progress', async (req, res) => {
 });
 
 // **ENDPOINT ที่ 4: ดึงข้อมูลความคืบหน้าของบทเรียนที่ระบุ (Get Specific Lesson Progress)**
+// 💡 แก้ไข: ใช้ Path Parameters เพื่อดึง Lesson ID จาก Flutter (ตามที่ App คาดหวัง)
 app.get('/api/get_progress', async (req, res) => {
     const { userId, courseId, lessonId } = req.query; // 💡 ดึงจาก query parameter
 
@@ -450,25 +455,26 @@ app.get('/api/get_progress', async (req, res) => {
 
     try {
         const query = `
-            SELECT saved_seconds AS "savedSeconds"
+            SELECT saved_seconds AS "savedSeconds", course_status AS "courseStatus"
             FROM video_progress
             WHERE user_id = $1 AND course_id = $2 AND lesson_id = $3;
         `;
         const result = await pool.query(query, [userId, courseId, lessonId]);
 
         if (result.rows.length === 0) {
-            // 💡 คืนค่า 0 หากไม่พบข้อมูล เพื่อให้ Flutter เริ่มวิดีโอตั้งแต่ต้น
-            return res.status(200).json({ 
+            // คืนค่า 0 หากไม่พบข้อมูล
+            return res.status(404).json({ // 💡 คืน 404 เพื่อให้ Flutter รู้ว่ายังไม่เคยดู
                 message: 'No progress found for this lesson.',
-                savedSeconds: 0 
+                savedSeconds: 0,
+                courseStatus: 'เรียนใหม่'
             });
         }
 
-        console.log(`Progress fetched for User ${userId}, Course ${courseId}, Lesson ${lessonId}.`);
-        
-        res.status(200).json({ 
+        // 💡 คืนค่าสถานะและเวลาที่บันทึกไว้
+        res.status(200).json({
             message: 'Progress fetched successfully.',
-            savedSeconds: result.rows[0].savedSeconds
+            savedSeconds: result.rows[0].savedSeconds,
+            courseStatus: result.rows[0].courseStatus
         });
 
     } catch (error) {
@@ -476,6 +482,183 @@ app.get('/api/get_progress', async (req, res) => {
         res.status(500).json({ message: 'Internal server error during progress fetch.', error: error.message });
     }
 });
+
+// **ENDPOINT ที่ 5: ดึงข้อมูลความคืบหน้าทั้งหมดของคอร์ส (Get Last Progress for Course Detail Page)**
+// Route: GET /api/get_progress/:userId/:courseId
+app.get('/api/get_progress/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+
+    if (!userId || !courseId) {
+        return res.status(400).json({ message: 'Missing userId or courseId.' });
+    }
+
+    try {
+        // 💡 ดึงข้อมูลความคืบหน้าล่าสุด (ตาม updated_at) ของคอร์สนั้น
+        const query = `
+            SELECT 
+                lesson_id AS "lessonId", 
+                saved_seconds AS "savedSeconds", 
+                course_status AS "courseStatus"
+            FROM video_progress
+            WHERE user_id = $1 AND course_id = $2
+            ORDER BY updated_at DESC
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [userId, courseId]);
+
+        if (result.rows.length === 0) {
+            // 💡 คืน 404 เมื่อไม่เคยดูคอร์สนี้เลย
+            return res.status(404).json({
+                message: 'No overall progress found for this course.'
+            });
+        }
+
+        res.status(200).json({
+            message: 'Last course progress fetched successfully.',
+            progress: result.rows[0] // คืนค่า progress node ล่าสุด
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR fetching last course progress:', error);
+        res.status(500).json({ message: 'Internal server error during progress fetch.', error: error.message });
+    }
+});
+
+// **ENDPOINT ที่ 6: ดึงสถานะการดูบทเรียนทั้งหมดในคอร์ส**
+// Route: GET /api/get_all_progress/:userId/:courseId
+app.get('/api/get_all_progress/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+
+    if (!userId || !courseId) {
+        return res.status(400).json({ message: 'Missing userId or courseId.' });
+    }
+
+    try {
+        // 💡 ดึงสถานะทั้งหมดของทุกบทเรียนในคอร์สนี้
+        const query = `
+            SELECT 
+                lesson_id AS "lessonId", 
+                course_status AS "courseStatus"
+            FROM video_progress
+            WHERE user_id = $1 AND course_id = $2;
+        `;
+        const result = await pool.query(query, [userId, courseId]);
+
+        if (result.rows.length === 0) {
+            return res.status(200).json([]); // คืน Array เปล่าถ้าไม่มีข้อมูล
+        }
+
+        res.status(200).json(result.rows); // คืน Array ของ { lessonId, courseStatus }
+
+    } catch (error) {
+        console.error('🛑 ERROR fetching all progress:', error);
+        res.status(500).json({ message: 'Internal server error during progress fetch.', error: error.message });
+    }
+});
+// **ENDPOINT ที่ 7: บันทึก/อัปเดตคะแนนคอร์ส (Rate Course) - [FINAL FIX]**
+app.post('/api/rate_course', async (req, res) => {
+    const { courseId, userId, rating, review_text } = req.body; 
+
+    // ✅ [STEP 1] ตรวจสอบและแปลงค่า (Parsing)
+    const courseIdInt = parseInt(courseId);
+    const userIdInt = parseInt(userId);
+    const ratingValue = parseInt(rating); 
+
+    if (isNaN(courseIdInt) || isNaN(userIdInt) || isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+        return res.status(400).json({ message: 'Invalid input data.' });
+    }
+    const finalReviewText = (review_text === '' || review_text === undefined || review_text === null) ? null : review_text;
+
+    try {
+        // 1. บันทึก/อัปเดตคะแนนของผู้ใช้ (Upsert ใน course_ratings)
+        const upsertRatingQuery = `
+            INSERT INTO course_ratings (course_id, user_id, rating_value, review_text)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (course_id, user_id) DO UPDATE
+            SET 
+                rating_value = EXCLUDED.rating_value,
+                review_text = EXCLUDED.review_text;
+        `;
+        await pool.query(upsertRatingQuery, [courseIdInt, userIdInt, ratingValue, finalReviewText]);
+
+        // 2. ✅ [CRITICAL FIX] บังคับให้ Progress Record ของ Lesson แรกถูกตั้งค่าเป็น 'ทบทวน'
+        //    เราจะค้นหา Lesson ID แรกของคอร์สก่อน
+        const firstLessonQuery = `
+            SELECT lesson_id 
+            FROM video_lessons 
+            WHERE course_id = $1 
+            ORDER BY lesson_id ASC 
+            LIMIT 1;
+        `;
+        const firstLessonResult = await pool.query(firstLessonQuery, [courseIdInt]);
+
+        if (firstLessonResult.rows.length === 0) {
+            // ไม่สามารถดำเนินการต่อได้หากไม่มีบทเรียนเลย
+            return res.status(500).json({ message: 'Course has no lessons, cannot set review status.' });
+        }
+        
+        const firstLessonId = firstLessonResult.rows[0].lesson_id;
+
+        // 3. ใช้ Upsert เพื่อสร้าง/อัปเดต Progress Record สำหรับ Lesson แรก
+        const progressUpsertQuery = `
+            INSERT INTO video_progress (user_id, course_id, lesson_id, saved_seconds, course_status, updated_at)
+            VALUES ($1, $2, $3, 0, 'ทบทวน', NOW())
+            ON CONFLICT (user_id, lesson_id) DO UPDATE
+            SET 
+                course_status = 'ทบทวน',
+                saved_seconds = 0, -- รีเซ็ตเวลาเป็น 0 เมื่อเข้าสู่โหมดทบทวน
+                updated_at = NOW(); 
+        `;
+        // 💡 ใช้ firstLessonId เป็น target เพื่อให้ ON CONFLICT ทำงานได้อย่างถูกต้อง
+        await pool.query(progressUpsertQuery, [userIdInt, courseIdInt, firstLessonId]);
+
+        console.log(`Rating saved/updated. Progress for Lesson ${firstLessonId} set to 'ทบทวน'.`);
+
+        // 4. ส่งค่ากลับ
+        res.status(200).json({ 
+            message: 'Course rating saved/updated and progress set for review successfully.',
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR during rate_course transaction:', error);
+        res.status(500).json({ message: 'Internal server error during rating process.', error: error.message });
+    }
+});
+
+// **ENDPOINT ที่ 8: ตรวจสอบสถานะการให้คะแนนของผู้ใช้**
+app.get('/api/check_user_rating/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+    const userIdInt = parseInt(userId);
+    const courseIdInt = parseInt(courseId);
+
+    if (isNaN(userIdInt) || isNaN(courseIdInt)) {
+        return res.status(400).json({ message: 'Invalid User ID or Course ID.' });
+    }
+
+    try {
+        const query = `
+            SELECT rating_value
+            FROM course_ratings
+            WHERE user_id = $1 AND course_id = $2;
+        `;
+        const result = await pool.query(query, [userIdInt, courseIdInt]);
+
+        if (result.rows.length > 0) {
+            // ถ้ามีข้อมูลในตาราง ratings แสดงว่าให้คะแนนแล้ว
+            return res.status(200).json({
+                message: 'User has rated this course.',
+                rating: result.rows[0].rating_value
+            });
+        } else {
+            // ถ้าไม่พบข้อมูลในตาราง ratings แสดงว่ายังไม่ให้คะแนน
+            return res.status(404).json({ message: 'User has not rated this course yet.' });
+        }
+    } catch (error) {
+        console.error('Error checking user rating:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 // ✅ Reports Endpoints
 // Endpoint สำหรับส่งรายงานปัญหา
@@ -499,6 +682,7 @@ app.post('/api/reports', async (req, res) => {
 });
 
 
+// 💡 ลบส่วน Mongoose และ module.exports = router ที่ทำให้เกิด Error ออกแล้ว
 
 // เริ่มต้นเซิร์ฟเวอร์
 app.listen(port, () => {

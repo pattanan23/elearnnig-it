@@ -1,13 +1,14 @@
-// course_overview_page.dart
-
 import 'package:e_learning_it/student_outsiders/course/course_detail_page.dart';
 import 'package:e_learning_it/student_outsiders/drawer_page.dart';
 import 'package:e_learning_it/student_outsiders/navbar_normal.dart';
-import 'package:e_learning_it/student_outsiders/main_page.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:math';
+
+
+const String _baseUrl = 'http://localhost:3006/api';
+
 
 class CourseAllPage extends StatelessWidget {
   final String userName;
@@ -37,6 +38,7 @@ class CourseAllPage extends StatelessWidget {
         const SizedBox(height: 30),
         LayoutBuilder(
           builder: (context, constraints) {
+            // กำหนดจำนวนคอลัมน์ตามขนาดหน้าจอ
             final int crossAxisCount = constraints.maxWidth > 800
                 ? 3
                 : constraints.maxWidth > 500
@@ -55,7 +57,8 @@ class CourseAllPage extends StatelessWidget {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     } else if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
+                      // 💡 แสดง Error ที่ชัดเจนขึ้น
+                      return Center(child: Text('เกิดข้อผิดพลาดในการโหลด: ${snapshot.error}', textAlign: TextAlign.center));
                     } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return const Center(child: Text('ไม่พบข้อมูลหลักสูตร'));
                     } else {
@@ -66,7 +69,8 @@ class CourseAllPage extends StatelessWidget {
                           crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
-                          childAspectRatio: 0.75,
+                          // ปรับ childAspectRatio เพื่อให้การ์ดมีสัดส่วนที่เหมาะสม
+                          childAspectRatio: constraints.maxWidth > 500 ? 0.75 : 1.0, 
                         ),
                         itemCount: snapshot.data!.length,
                         itemBuilder: (context, index) {
@@ -90,10 +94,12 @@ class CourseAllPage extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         try {
+          // 💡 ใช้ _baseUrl และ Endpoint สำหรับดึงรายละเอียด
           final response = await http.get(
-              Uri.parse('http://localhost:3006/api/course/${course.courseId}'));
+              Uri.parse('$_baseUrl/course/${course.courseId}'));
 
           if (response.statusCode == 200) {
+            // ตรวจสอบให้แน่ใจว่า CourseDetailPage รับ object Course ที่สมบูรณ์
             final courseDetails = Course.fromJson(json.decode(response.body));
 
             Navigator.push(
@@ -107,9 +113,10 @@ class CourseAllPage extends StatelessWidget {
               ),
             );
           } else {
+            // 💡 แสดง Status Code ใน SnackBar
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('ไม่สามารถดึงข้อมูลรายละเอียดหลักสูตรได้')),
+              SnackBar(
+                  content: Text('ไม่สามารถดึงข้อมูลรายละเอียดหลักสูตรได้. Status: ${response.statusCode}')),
             );
           }
         } catch (e) {
@@ -190,22 +197,29 @@ class CourseAllPage extends StatelessWidget {
 
   // --- API Fetching Logic ---
   Future<List<Course>> fetchRecommendedCourses() async {
-    final response = await http.get(Uri.parse('http://localhost:3006/api/show_courses'));
+    final response = await http.get(Uri.parse('$_baseUrl/show_courses'));
     if (response.statusCode == 200) {
       final List<dynamic> courseData = json.decode(response.body);
-      return courseData.map((json) => Course.fromJson(json)).toList();
+      var courses = courseData.map((json) => Course.fromJson(json)).toList();
+      // เรียงลำดับตาม courseId (สมมติว่าต้องการเรียง)
+      courses.sort((a, b) => a.courseId.compareTo(b.courseId));
+      return courses;
     } else {
-      throw Exception('Failed to load recommended courses');
+      throw Exception('Failed to load recommended courses. Status: ${response.statusCode}');
     }
   }
 
   Future<List<Course>> fetchAllCourses() async {
-    final response = await http.get(Uri.parse('http://localhost:3006/api/courses/all_by_id'));
+    // 💡 Endpoint สำหรับดึงหลักสูตรทั้งหมด
+    final response = await http.get(Uri.parse('$_baseUrl/show_courses'));
     if (response.statusCode == 200) {
       final List<dynamic> courseData = json.decode(response.body);
-      return courseData.map((json) => Course.fromJson(json)).toList();
+      var courses = courseData.map((json) => Course.fromJson(json)).toList();
+      // เรียงลำดับตาม courseId (สมมติว่าต้องการเรียง)
+      courses.sort((a, b) => a.courseId.compareTo(b.courseId));
+      return courses;
     } else {
-      throw Exception('Failed to load all courses');
+      throw Exception('Failed to load all courses. Status: ${response.statusCode}');
     }
   }
 
@@ -220,30 +234,38 @@ class CourseAllPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Use a container for the page title.
+              // Page Title
               Container(
-                child: const Row(
-                  children: [
-                    Text(
-                      'หลักสูตร',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2E7D32),
-                      ),
-                    ),
-                  ],
+                alignment: Alignment.centerLeft, // จัดให้ชิดซ้าย
+                child: const Text(
+                  'หลักสูตร',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              // New Courses Section
+              // All Courses Section
               _buildCourseSection(
                 context,
                 title: 'หลักสูตรทั้งหมด',
-                futureCourses: fetchAllCourses(),
+                futureCourses: fetchAllCourses(), // ดึงหลักสูตรทั้งหมดมาแสดง
                 userName: userName,
                 userId: userId,
               ),
+              // สามารถเพิ่มส่วนหลักสูตรแนะนำได้โดยลบคอมเมนต์ออก
+              /*
+              const SizedBox(height: 40),
+              _buildCourseSection(
+                context,
+                title: 'หลักสูตรแนะนำ',
+                futureCourses: fetchRecommendedCourses(),
+                userName: userName,
+                userId: userId,
+              ),
+              */
             ],
           ),
         ),
