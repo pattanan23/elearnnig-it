@@ -80,24 +80,20 @@ class _VdoPageState extends State<VdoPage> {
   bool _isFullScreen = false;
 
   // 📢 State ใหม่: ติดตามว่าผู้ใช้ให้คะแนนคอร์สนี้ไปแล้วหรือยัง
-  bool _isCourseRated = false; 
+  bool _isCourseRated = false;
 
   // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
   final String _apiUrl = 'http://localhost:3006/api/save_progress';
 
-  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง (ใช้ดึงข้อมูลวิดีโอเดียว)
   // 📢 Endpoint ที่ใช้สำหรับดึง progress ของ Lesson เดียว
-  final String _apiGetUrl = 'http://localhost:3006/api/get_progress_lesson'; 
-  
-  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
+  final String _apiGetUrl = 'http://localhost:3006/api/get_progress_lesson';
+
   // 📢 Endpoint ที่ใช้สำหรับดึง progress ทั้งหมดของ Course
   final String _apiGetAllProgressUrl = 'http://localhost:3006/api/get_all_progress';
 
-  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
   // 📢 Endpoint ใหม่: สำหรับบันทึกคะแนนคอร์ส (Rate Course)
   final String _apiRateCourseUrl = 'http://localhost:3006/api/rate_course';
 
-  // ⚠️ กรุณาเปลี่ยน IP และ Port ให้ถูกต้อง
   // 📢 Endpoint ใหม่: สำหรับตรวจสอบสถานะการให้คะแนน
   final String _apiCheckRatingUrl = 'http://localhost:3006/api/check_user_rating';
 
@@ -108,7 +104,7 @@ class _VdoPageState extends State<VdoPage> {
     _currentVideoIndex = widget.initialLessonIndex;
 
     // 💡 [ADDED] ตรวจสอบสถานะการให้คะแนนทันทีเมื่อเข้าหน้า
-    _checkIfUserHasRated(); 
+    _checkIfUserHasRated();
 
     if (widget.lessons.isNotEmpty) {
       _fetchCompletedLessons(); // ดึงสถานะวิดีโอที่ดูจบแล้ว (เพื่อแสดง Checkmark)
@@ -146,11 +142,11 @@ class _VdoPageState extends State<VdoPage> {
       print('🌐 Error checking rating status: $e');
     }
   }
-  
+
   // 💡 [NEW FUNCTION] ฟังก์ชันสำหรับเรียก API ให้คะแนนคอร์ส
   Future<void> _rateCourse(int rating, String? reviewText) async {
     // กำหนด reviewText ให้เป็น null ถ้าเป็นสตริงว่างเปล่า
-    final String? finalReviewText = 
+    final String? finalReviewText =
         (reviewText == null || reviewText.trim().isEmpty) ? null : reviewText;
 
     try {
@@ -172,7 +168,7 @@ class _VdoPageState extends State<VdoPage> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             // 💡 ปรับข้อความเพื่อรองรับการให้คะแนนครั้งแรกและการทบทวนคะแนน
-            const SnackBar(content: Text('✅ บันทึก/อัปเดตคะแนนเรียบร้อยแล้ว!')), 
+            const SnackBar(content: Text('✅ บันทึก/อัปเดตคะแนนเรียบร้อยแล้ว!')),
           );
         }
       } else if (response.statusCode == 404) {
@@ -272,7 +268,7 @@ class _VdoPageState extends State<VdoPage> {
     final uri = Uri.parse('$_apiGetAllProgressUrl/${widget.userId}/${widget.courseId}');
     try {
       final response = await http.get(uri);
-      
+
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         final Set<int> completedIndices = data
@@ -288,7 +284,7 @@ class _VdoPageState extends State<VdoPage> {
           setState(() {
             _completedVideos.clear();
             // 💡 [MODIFIED] บันทึกเฉพาะ index ที่ดูจบแล้ว
-            _completedVideos.addAll(completedIndices); 
+            _completedVideos.addAll(completedIndices);
           });
         }
       } else {
@@ -332,7 +328,7 @@ class _VdoPageState extends State<VdoPage> {
 
     if (_isControllerInitialized) {
       // 💡 [IMPORTANT] บันทึกความคืบหน้าของวิดีโอเดิม ก่อนจะเปลี่ยน
-      await _saveVideoProgress(); 
+      await _saveVideoProgress();
       await _controller.dispose();
       _isControllerInitialized = false;
     }
@@ -381,9 +377,9 @@ class _VdoPageState extends State<VdoPage> {
         if (_controller.value.position >= _controller.value.duration &&
             _controller.value.duration > Duration.zero &&
             !_completedVideos.contains(_currentVideoIndex)) {
-          
+
           _saveVideoProgress(isCompleted: true); // บันทึกสถานะจบวิดีโอ
-          
+
           if (mounted) {
             setState(() {
               _completedVideos.add(_currentVideoIndex);
@@ -401,9 +397,9 @@ class _VdoPageState extends State<VdoPage> {
   // 💡 ฟังก์ชันบันทึกความคืบหน้า (ใช้ตอนเปลี่ยนวิดีโอและตอนออกเท่านั้น)
   Future<void> _saveVideoProgress({bool isCompleted = false}) async {
     if (!mounted || widget.lessons.isEmpty) return;
-    
+
     // 💡 หาก Controller ยังไม่ถูก Init หรือถูก Dispose ไปแล้ว ไม่ต้องบันทึก
-    if (!_isControllerInitialized) return; 
+    if (!_isControllerInitialized) return;
 
     final Lesson currentLesson = widget.lessons[_currentVideoIndex];
     final Duration savedPosition = _controller.value.position;
@@ -448,14 +444,14 @@ class _VdoPageState extends State<VdoPage> {
   // 💡 [MODIFIED FUNCTION] นำทางและเริ่มเล่นวิดีโอที่เลือก
   void _playVideo(int index) async {
     // 💡 [REMOVED] ลบการตรวจสอบ isUnlocked
-    
+
     if (_currentVideoIndex != index) {
       final Lesson newLesson = widget.lessons[index];
-      
-      // ถ้าวิดีโอถูกดูจบแล้ว (มี checkmark) ให้เริ่มจาก 0 สำหรับการทบทวน 
+
+      // ถ้าวิดีโอถูกดูจบแล้ว (มี checkmark) ให้เริ่มจาก 0 สำหรับการทบทวน
       final bool isLessonCompleted = _completedVideos.contains(index);
       final int savedPosition = isLessonCompleted
-          ? 0 
+          ? 0
           : await _fetchSavedProgress(
                 widget.courseId, widget.userId, newLesson.id);
 
@@ -469,7 +465,7 @@ class _VdoPageState extends State<VdoPage> {
       _initializeVideoPlayer(index, savedSeconds: savedPosition);
     }
   }
-  
+
   void _seek(int seconds) {
     if (_isControllerInitialized && _controller.value.isInitialized) {
       final newPosition = _controller.value.position + Duration(seconds: seconds);
@@ -534,7 +530,7 @@ class _VdoPageState extends State<VdoPage> {
             ),
             // 💡 บันทึกความคืบหน้าเมื่อกดยืนยันกลับ
             TextButton(
-              onPressed: () => Navigator.of(context).pop(true), 
+              onPressed: () => Navigator.of(context).pop(true),
               child: const Text('ตกลง'),
             ),
           ],
@@ -589,7 +585,6 @@ class _VdoPageState extends State<VdoPage> {
                     if (widget.lessons.isNotEmpty) ...[
                       _buildCurrentVideoHeader(),
                       _buildVideoInfoAndFiles(),
-                      _buildCourseActions(), // 👈 [UPDATED] ส่วนการให้คะแนน/ทบทวน
                       const Divider(height: 1),
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -615,7 +610,7 @@ class _VdoPageState extends State<VdoPage> {
                         if (widget.lessons.isNotEmpty) ...[
                           _buildCurrentVideoHeader(),
                           _buildVideoInfoAndFiles(),
-                          _buildCourseActions(), // 👈 [UPDATED] ส่วนการให้คะแนน/ทบทวน
+
                         ],
                       ],
                     ),
@@ -635,47 +630,7 @@ class _VdoPageState extends State<VdoPage> {
 
   // --- Widgets ---
 
-  // 💡 [MODIFIED WIDGET] ปรับปรุงให้สามารถกดเพื่อทบทวน/ให้คะแนนใหม่ได้
-  Widget _buildCourseActions() {
-    final bool isRated = _isCourseRated;
-    final String buttonText = isRated ? 'ทบทวน/ให้คะแนนใหม่' : 'ให้คะแนนคอร์สนี้';
-    final IconData buttonIcon = isRated ? Icons.rate_review : Icons.star_rate;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'การดำเนินการของคอร์ส',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
-          ),
-          const Divider(height: 16, thickness: 1),
-          ElevatedButton.icon(
-            // 💡 [MODIFICATION] สามารถกดได้เสมอเพื่อเปิด Dialog ให้คะแนนใหม่
-            onPressed: _showRatingDialog, 
-            icon: Icon(
-              buttonIcon,
-              color: Colors.white,
-            ),
-            label: Text(
-              buttonText,
-              style: const TextStyle(fontSize: 16, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              // 💡 [MODIFICATION] ใช้สีเขียวคงที่เพื่อแสดงว่าปุ่มยังใช้งานได้
-              backgroundColor: const Color(0xFF2E7D32), 
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              elevation: 5,
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
+  // 💡 [MODIFIED WIDGET] เพิ่มปุ่ม Rate Course
   Widget _buildCurrentVideoHeader() {
     final currentLesson = widget.lessons[_currentVideoIndex];
 
@@ -688,6 +643,24 @@ class _VdoPageState extends State<VdoPage> {
             'วิดีโอตอนที่ ${_currentVideoIndex + 1}: ${currentLesson.videoName}',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 16),
+          // 💡 ส่วนนี้เพิ่มเข้ามา
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: _showRatingDialog,
+              icon: Icon(_isCourseRated ? Icons.star : Icons.star_border, color: Colors.white),
+              label: Text(_isCourseRated ? 'แก้ไข/ทบทวนคะแนน' : 'ให้คะแนนคอร์สเรียน'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          // 💡 สิ้นสุดส่วนที่เพิ่ม
           const SizedBox(height: 16),
           Text(
             currentLesson.videoDescription,
@@ -863,7 +836,7 @@ class _VdoPageState extends State<VdoPage> {
     final bool isFinishedWatching = _completedVideos.contains(index);
 
     // 💡 [MODIFIED] ใช้ Card และ ListTile เพื่อให้ดูดีขึ้น
-    return Card( 
+    return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
       elevation: isCurrent ? 4 : 1,
       color: isCurrent ? Colors.lightGreen.shade50 : Colors.white,
@@ -886,7 +859,7 @@ class _VdoPageState extends State<VdoPage> {
         subtitle:
             Text(lesson.videoDescription, maxLines: 2, overflow: TextOverflow.ellipsis),
         // 💡 [MODIFIED] สามารถกดได้เสมอ
-        onTap: () => _playVideo(index), 
+        onTap: () => _playVideo(index),
       ),
     );
   }

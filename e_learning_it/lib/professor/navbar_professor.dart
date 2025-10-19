@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:e_learning_it/login_page.dart';
+// 1. Import the new ProfilePage
+import 'package:e_learning_it/professor/professor_profile_page.dart';
 
 class NavbarProcessorPage extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
@@ -16,12 +18,27 @@ class NavbarProcessorPage extends StatelessWidget implements PreferredSizeWidget
       title: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(
-            userName,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          // 2. Wrap the Text with a GestureDetector
+          GestureDetector(
+            onTap: () {
+              // Navigate to the ProfilePage when the name is tapped
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfessorProfilePage(
+                    userName: userName,
+                    userId: userId,
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              userName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ),
           const SizedBox(width: 10),
-      IconButton(
+          IconButton(
             icon: const Icon(Icons.power_settings_new, color: Colors.white),
             onPressed: () {
               // คำสั่งสำหรับกลับไปหน้า Login
@@ -33,7 +50,7 @@ class NavbarProcessorPage extends StatelessWidget implements PreferredSizeWidget
           ),
         ],
       ),
-    );  
+    );
   }
 
   @override

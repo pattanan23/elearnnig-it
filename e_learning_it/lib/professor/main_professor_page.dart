@@ -6,8 +6,6 @@ import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'package:e_learning_it/professor/course_professor_detail.dart';
 
-// Class Course ถูกย้ายไปไว้ใน course_professor_detail.dart แล้ว
-
 class MainProfessorPage extends StatelessWidget {
   final String userName;
   final String userId;
@@ -29,7 +27,8 @@ class MainProfessorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: NavbarProcessorPage(userName: userName, userId: userId),
+      // 🎯 การแก้ไข: เพิ่ม onProfileTap callback ใน NavbarProcessorPage
+       appBar: NavbarProcessorPage(userName: userName, userId: userId),
       drawer: DrawerProcessorPage(userName: userName, userId: userId),
       body: SingleChildScrollView(
         child: Padding(
@@ -38,26 +37,26 @@ class MainProfessorPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 200,
+                height: 150,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
                   color: Colors.grey[300],
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://placehold.co/1200x400/CCCCCC/333333?text=หลักสูตรวิทยาศาสตรบัณฑิต+สาขาวิชาเทคโนโลยีสารสนเทศ',
+                  image: DecorationImage(
+                    image: AssetImage(
+                      'assets/images/post.png',
                     ),
                     fit: BoxFit.cover,
                   ),
                 ),
                 child: const Align(
-                  alignment: Alignment.bottomLeft,
+                  alignment: Alignment.centerRight, // เปลี่ยนเป็น center
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: EdgeInsets.only(right: 300),
                     child: Text(
                       'หลักสูตรวิทยาศาสตรบัณฑิต สาขาวิชาเทคโนโลยีสารสนเทศ',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         shadows: [
@@ -73,34 +72,38 @@ class MainProfessorPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+
               Container(
                 height: 150,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: Colors.lightGreen[100],
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://placehold.co/1200x300/E8F5E9/000000?text=WELCOME+KU+85+สู่รั้วนนทรี',
+                  color: Colors.grey[300],
+                  image: DecorationImage(
+                    image: AssetImage(
+                      'assets/images/post2.png',
                     ),
                     fit: BoxFit.cover,
                   ),
                 ),
                 child: const Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    'WELCOME KU 85 สู่รั้วนนทรี',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(1.0, 1.0),
-                          blurRadius: 2.0,
-                          color: Color.fromARGB(50, 0, 0, 0),
-                        ),
-                      ],
+                  alignment: Alignment.centerLeft, // เปลี่ยนเป็น center
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 150),
+                    child: Text(
+                      'ยินดีต้อนรับสู่ระบบ E-Learning IT',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(1.0, 1.0),
+                            blurRadius: 3.0,
+                            color: Color.fromARGB(150, 0, 0, 0),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

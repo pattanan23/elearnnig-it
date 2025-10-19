@@ -16,7 +16,8 @@ class MainPage extends StatelessWidget {
 
   // ฟังก์ชันสำหรับดึงข้อมูลคอร์สจาก API
   Future<List<Course>> fetchRecommendedCourses() async {
-    final response = await http.get(Uri.parse('http://localhost:3006/api/show_courses'));
+    final response =
+        await http.get(Uri.parse('http://localhost:3006/api/show_courses'));
 
     if (response.statusCode == 200) {
       final List<dynamic> courseData = json.decode(response.body);
@@ -38,26 +39,26 @@ class MainPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 200,
+                height: 150,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
                   color: Colors.grey[300],
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://placehold.co/1200x400/CCCCCC/333333?text=หลักสูตรวิทยาศาสตรบัณฑิต+สาขาวิชาเทคโนโลยีสารสนเทศ',
+                  image: DecorationImage(
+                    image: AssetImage(
+                      'assets/images/post.png',
                     ),
                     fit: BoxFit.cover,
                   ),
                 ),
                 child: const Align(
-                  alignment: Alignment.bottomLeft,
+                  alignment: Alignment.centerRight, // เปลี่ยนเป็น center
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: EdgeInsets.only(right: 300),
                     child: Text(
                       'หลักสูตรวิทยาศาสตรบัณฑิต สาขาวิชาเทคโนโลยีสารสนเทศ',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         shadows: [
@@ -73,34 +74,38 @@ class MainPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+
               Container(
                 height: 150,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: Colors.lightGreen[100],
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                      'https://placehold.co/1200x300/E8F5E9/000000?text=WELCOME+KU+85+สู่รั้วนนทรี',
+                  color: Colors.grey[300],
+                  image: DecorationImage(
+                    image: AssetImage(
+                      'assets/images/post2.png',
                     ),
                     fit: BoxFit.cover,
                   ),
                 ),
                 child: const Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    'WELCOME KU 85 สู่รั้วนนทรี',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(1.0, 1.0),
-                          blurRadius: 2.0,
-                          color: Color.fromARGB(50, 0, 0, 0),
-                        ),
-                      ],
+                  alignment: Alignment.centerLeft, // เปลี่ยนเป็น center
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 150),
+                    child: Text(
+                      'ยินดีต้อนรับสู่ระบบ E-Learning IT',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(1.0, 1.0),
+                            blurRadius: 3.0,
+                            color: Color.fromARGB(150, 0, 0, 0),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -129,17 +134,23 @@ class MainPage extends StatelessWidget {
                       child: FutureBuilder<List<Course>>(
                         future: fetchRecommendedCourses(),
                         builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
                           } else if (snapshot.hasError) {
-                            return Center(child: Text('Error: ${snapshot.error}'));
-                          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Center(child: Text('ไม่พบข้อมูลหลักสูตร'));
+                            return Center(
+                                child: Text('Error: ${snapshot.error}'));
+                          } else if (!snapshot.hasData ||
+                              snapshot.data!.isEmpty) {
+                            return const Center(
+                                child: Text('ไม่พบข้อมูลหลักสูตร'));
                           } else {
                             return GridView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
                                 crossAxisSpacing: 16,
                                 mainAxisSpacing: 16,
@@ -222,7 +233,8 @@ class MainPage extends StatelessWidget {
                     image: NetworkImage(course.imageUrl),
                     fit: BoxFit.cover,
                   ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(10)),
                 ),
               ),
             ),
@@ -232,9 +244,12 @@ class MainPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 🎯 การแก้ไข: ใช้ Null-aware operator ?? '' เพื่อป้องกันค่า null
-                  _buildCourseInfoRow('รหัสวิชา:', course.courseCode?.toString() ?? 'ไม่ระบุ'),
+                  _buildCourseInfoRow(
+                      'รหัสวิชา:', course.courseCode?.toString() ?? 'ไม่ระบุ'),
                   _buildCourseInfoRow('ชื่อวิชา:', course.courseName),
-                  _buildCourseInfoRow('รายละเอียด:', course.shortDescription?.toString() ?? 'ไม่มีข้อมูล', maxLines: 2),
+                  _buildCourseInfoRow('รายละเอียด:',
+                      course.shortDescription?.toString() ?? 'ไม่มีข้อมูล',
+                      maxLines: 2),
                   _buildCourseInfoRow('อาจารย์ผู้สอน:', course.professorName),
                 ],
               ),

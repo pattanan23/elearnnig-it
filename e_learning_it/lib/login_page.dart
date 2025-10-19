@@ -6,6 +6,7 @@ import 'login/screen_size.dart'; // Import ResponsiveLayout
 import 'error_dialog_page.dart'; // Import หน้า Dialog Box ที่สร้างขึ้นใหม่
 import 'login/membership.dart'; // Import หน้า MembershipPage
 import 'professor/main_professor_page.dart'; // Import หน้าสำหรับอาจารย์
+import 'admin/admin_login_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -186,6 +187,24 @@ class _LoginScreenState extends State<LoginScreen> {
             },
             child: const Text(
               'สมัครสมาชิก', // ข้อความที่คุณขอ
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 16,
+                decoration: TextDecoration.underline, // เพิ่มขีดเส้นใต้เพื่อให้ดูเหมือนลิงก์
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // นำทางไปที่หน้า MembershipPage
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AdminLoginPage(),
+                ),
+              );
+            },
+            child: const Text(
+              'ระบบผู้ดูแล', // ข้อความที่คุณขอ
               style: TextStyle(
                 color: Colors.green,
                 fontSize: 16,

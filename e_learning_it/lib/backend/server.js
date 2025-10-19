@@ -12,6 +12,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const ffmpeg = require('fluent-ffmpeg');
 const os = require('os');
+const PDFDocument = require('pdfkit');
 
 // Ensure ffmpeg paths are correct for your system
 ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
@@ -36,7 +37,6 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD,
     port: parseInt(process.env.DB_PORT),
 });
-
 
 
 pool.connect((err, client, done) => {
@@ -86,6 +86,63 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error('Error during login:', error);
         return res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+    }
+});
+
+app.post('/api/login-admin', async (req, res) => {
+    const { identifier, password } = req.body;
+
+    // ตรวจสอบว่ามีข้อมูลครบถ้วนหรือไม่
+    if (!identifier || !password) {
+        return res.status(400).json({ message: 'กรุณากรอก Email/รหัสนิสิต และรหัสผ่าน' });
+    }
+
+    try {
+        // ค้นหาผู้ใช้จาก email หรือ student_id (สมมติว่า identifier คือ user input)
+        const userQuery = `
+            SELECT 
+                user_id, 
+                password_hash, 
+                role, 
+                first_name, 
+                last_name, 
+                email,
+                student_id
+            FROM users 
+            WHERE email = $1 OR student_id = $1;
+        `;
+        const result = await pool.query(userQuery, [identifier]);
+
+        if (result.rows.length === 0) {
+            // ไม่พบผู้ใช้
+            return res.status(401).json({ message: 'Email หรือรหัสนิสิตไม่ถูกต้อง' });
+        }
+
+        const user = result.rows[0];
+        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+
+        if (!isPasswordValid) {
+            // รหัสผ่านไม่ถูกต้อง
+            return res.status(401).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
+        }
+
+        // ล็อกอินสำเร็จ ส่งข้อมูลผู้ใช้กลับไปตามที่ Flutter ต้องการ
+        return res.status(200).json({
+            message: 'เข้าสู่ระบบสำเร็จ',
+            user: {
+                user_id: user.user_id,
+                email: user.email,
+                student_id: user.student_id, // ใส่ student_id ไปด้วย (ถ้ามี)
+                first_name: user.first_name,
+                last_name: user.last_name,
+                role: user.role // 'นิสิต', 'อาจารย์', 'ผู้ดูแล'
+            }
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR during login API:', error);
+        // แสดง Dialog Box ข้อผิดพลาดเมื่อเกิด Exception
+        return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง' });
     }
 });
 
@@ -555,14 +612,15 @@ app.get('/api/get_all_progress/:userId/:courseId', async (req, res) => {
         res.status(500).json({ message: 'Internal server error during progress fetch.', error: error.message });
     }
 });
+
 // **ENDPOINT ที่ 7: บันทึก/อัปเดตคะแนนคอร์ส (Rate Course) - [FINAL FIX]**
 app.post('/api/rate_course', async (req, res) => {
-    const { courseId, userId, rating, review_text } = req.body; 
+    const { courseId, userId, rating, review_text } = req.body;
 
     // ✅ [STEP 1] ตรวจสอบและแปลงค่า (Parsing)
     const courseIdInt = parseInt(courseId);
     const userIdInt = parseInt(userId);
-    const ratingValue = parseInt(rating); 
+    const ratingValue = parseInt(rating);
 
     if (isNaN(courseIdInt) || isNaN(userIdInt) || isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
         return res.status(400).json({ message: 'Invalid input data.' });
@@ -582,7 +640,7 @@ app.post('/api/rate_course', async (req, res) => {
         await pool.query(upsertRatingQuery, [courseIdInt, userIdInt, ratingValue, finalReviewText]);
 
         // 2. ✅ [CRITICAL FIX] บังคับให้ Progress Record ของ Lesson แรกถูกตั้งค่าเป็น 'ทบทวน'
-        //    เราจะค้นหา Lesson ID แรกของคอร์สก่อน
+        //    เราจะค้นหา Lesson ID แรกของคอร์สก่อน
         const firstLessonQuery = `
             SELECT lesson_id 
             FROM video_lessons 
@@ -596,7 +654,7 @@ app.post('/api/rate_course', async (req, res) => {
             // ไม่สามารถดำเนินการต่อได้หากไม่มีบทเรียนเลย
             return res.status(500).json({ message: 'Course has no lessons, cannot set review status.' });
         }
-        
+
         const firstLessonId = firstLessonResult.rows[0].lesson_id;
 
         // 3. ใช้ Upsert เพื่อสร้าง/อัปเดต Progress Record สำหรับ Lesson แรก
@@ -615,7 +673,7 @@ app.post('/api/rate_course', async (req, res) => {
         console.log(`Rating saved/updated. Progress for Lesson ${firstLessonId} set to 'ทบทวน'.`);
 
         // 4. ส่งค่ากลับ
-        res.status(200).json({ 
+        res.status(200).json({
             message: 'Course rating saved/updated and progress set for review successfully.',
         });
 
@@ -659,9 +717,445 @@ app.get('/api/check_user_rating/:userId/:courseId', async (req, res) => {
     }
 });
 
+// ✅ Certificates Endpoints
+// 1. ENDPOINT: ดึงข้อมูลวุฒิบัตร (GET /api/certificates/:userId/:courseId)
+app.get('/api/certificates/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+
+    try {
+        // 🎯 [แก้ไข SQL Query] ใช้ c.course_detail หรือ c.course_code เป็น subject_name
+        const courseQuery = `
+            SELECT 
+                c.course_name, 
+                c.course_code AS subject_name, /* 👈 [สำคัญ] ใช้ course_code หรือ course_detail แล้วตั้ง Alias เป็น subject_name */
+                u.first_name, u.last_name,
+                cert.issue_date
+            FROM courses c
+            JOIN users u ON u.user_id = $1  
+            LEFT JOIN certificates cert ON cert.user_id = $1 AND cert.course_id = $2
+            WHERE c.course_id = $2;
+        `;
+
+        const result = await pool.query(courseQuery, [userId, courseId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Certificate data not found.' });
+        }
+
+        const data = result.rows[0];
+
+        // 🎯 [สำคัญ: การแก้ไขวันที่]
+        let formattedIssueDate = '';
+        const issueDateValue = data.issue_date;
+
+        if (issueDateValue) {
+            const dateObj = new Date(issueDateValue);
+
+            // 💡 [FIX] ตรวจสอบว่า Date object ที่สร้างขึ้นมานั้นถูกต้อง (is not NaN)
+            if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
+                // แปลงเป็น YYYY-MM-DD format (มาตรฐานที่ Flutter Parse ได้)
+                formattedIssueDate = dateObj.toISOString().split('T')[0];
+            }
+            // ถ้าเป็น Invalid Date จะข้ามไป ทำให้ formattedIssueDate เป็น ''
+        }
+
+        // จัดรูปแบบข้อมูลที่ส่งกลับให้ตรงกับ CertificateData.fromJson ใน Frontend
+        const responseData = {
+            firstName: data.first_name,
+            lastName: data.last_name || '',
+            subjectName: data.subject_name || data.course_name || 'ไม่ระบุหลักสูตรย่อย',
+            courseName: data.course_name,
+            issueDate: formattedIssueDate, // ใช้ค่าที่ตรวจสอบแล้ว (YYYY-MM-DD หรือ '')
+        };
+
+        res.json(responseData);
+
+    } catch (error) {
+        // ให้ Error 500 ตอบกลับข้อความที่ไม่ใช่ Database Syntax Error เพื่อให้ Frontend จัดการง่ายขึ้น
+        console.error('🛑 ERROR fetching certificate data:', error);
+        res.status(500).json({ message: 'Internal server error while fetching certificate.' });
+    }
+});
+
+// 2. ENDPOINT: ตรวจสอบสถานะวุฒิบัตร (GET /api/get_certificate/:userId/:courseId)
+app.get('/api/get_certificate/:userId/:courseId', async (req, res) => {
+    try {
+        const { userId, courseId } = req.params;
+
+        // ตรวจสอบเฉพาะตาราง certificates
+        const query = `
+            SELECT user_id 
+            FROM certificates 
+            WHERE user_id = $1 AND course_id = $2;
+        `;
+
+        const result = await pool.query(query, [userId, courseId]);
+
+        if (result.rows.length > 0) {
+            // พบวุฒิบัตร: isGenerated เป็น true
+            return res.status(200).json({
+                isGenerated: true
+            });
+        }
+
+        // ไม่พบวุฒิบัตร: isGenerated เป็น false (ใช้ 200 เพื่อให้ Flutter จัดการง่าย)
+        return res.status(200).json({
+            isGenerated: false
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR checking certificate status:', error);
+        res.status(500).json({ message: 'Internal server error during certificate status check.' });
+    }
+});
+
+// 3. ENDPOINT: บันทึกวันที่ออกวุฒิบัตร (POST /api/certificates/save)
+app.post('/api/certificates/save', async (req, res) => {
+    // issueDate จะถูกส่งมาเป็น String 'YYYY-MM-DD'
+    const { userId, courseId, issueDate } = req.body;
+
+    if (!userId || !courseId || !issueDate) {
+        return res.status(400).json({ message: 'Missing required data (userId, courseId, issueDate)' });
+    }
+
+    try {
+        // ใช้ ON CONFLICT DO NOTHING เพื่อให้แน่ใจว่าถ้ามีข้อมูลอยู่แล้ว จะไม่เกิด Error
+        // และเป็นการบันทึก issueDate ครั้งแรกเท่านั้น
+        const query = `
+            INSERT INTO certificates (user_id, course_id, issue_date) 
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, course_id) DO NOTHING;
+        `;
+
+        const result = await pool.query(query, [userId, courseId, issueDate]);
+
+        if (result.rowCount === 0) {
+            // ถ้า rowCount เป็น 0 แปลว่ามีการชนกันและไม่ได้ทำการ INSERT ใหม่
+            return res.status(200).json({ message: "Issue date already saved." });
+        }
+
+        res.status(200).json({ message: "Issue date saved successfully." });
+
+    } catch (error) {
+        console.error('🛑 ERROR saving issue date:', error);
+        res.status(500).json({ message: 'Internal server error during issue date save.' });
+    }
+});
+
+// 2. ENDPOINT: สร้างและดาวน์โหลด PDF (GET /api/certificates/pdf/:userId/:courseId)
+app.get('/api/certificates/pdf/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+
+    // 💡 Path จึงชี้ไปที่ Subfolder 'font' และ 'assets'
+    const FONT_REGULAR_PATH = path.join(__dirname, 'font/Sarabun-Regular.ttf');
+    const FONT_BOLD_PATH = path.join(__dirname, 'font/Sarabun-ExtraBold.ttf');
+
+    // 🎯 [NEW] กำหนด Path ของโลโก้ (กรุณาเปลี่ยนชื่อไฟล์และ Path ให้ถูกต้อง)
+    const LOGO_PATH = path.join(__dirname, 'font/logo4.png'); // ⚠️ ตรวจสอบ Path นี้!
+
+    // 2. ตรวจสอบสถานะฟอนต์ และกำหนด Fallback
+    const FONT_AVAILABLE = fs.existsSync(FONT_REGULAR_PATH) && fs.existsSync(FONT_BOLD_PATH);
+
+    // กำหนดชื่อฟอนต์ที่จะใช้
+    const NORMAL_FONT = FONT_AVAILABLE ? FONT_REGULAR_PATH : 'Times-Roman';
+    const BOLD_FONT = FONT_AVAILABLE ? FONT_BOLD_PATH : 'Times-Bold';
+
+    if (!FONT_AVAILABLE) {
+        console.warn('⚠️ WARN: Thai font files not found. Using standard Times-Roman. Thai text may display incorrectly.');
+    }
+
+    try {
+        // 1. ดึงข้อมูลวุฒิบัตรจากฐานข้อมูล (ใช้ JOIN เหมือนเดิม)
+        const query = `
+            SELECT
+                u.first_name,
+                u.last_name,
+                c.course_name,
+                c.course_code AS subject_name,
+                cert.issue_date
+            FROM
+                certificates cert
+            JOIN
+                users u ON cert.user_id = u.user_id
+            JOIN
+                courses c ON cert.course_id = c.course_id
+            WHERE
+                cert.user_id = $1 AND cert.course_id = $2;
+        `;
+        const result = await pool.query(query, [userId, courseId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Certificate data not found.' });
+        }
+
+        const data = result.rows[0];
+        const fullName = `${data.first_name} ${data.last_name}`;
+
+        // แปลง issue_date เป็นรูปแบบภาษาไทยที่อ่านได้ (สำหรับแสดงใน PDF)
+        let issueDateFormatted = 'ไม่ระบุวันที่';
+        if (data.issue_date) {
+            const dateObj = new Date(data.issue_date);
+            // 💡 [FIX for Invalid Date] ตรวจสอบก่อนจัดรูปแบบ
+            if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
+                // ใช้ Intl.DateTimeFormat จัดรูปแบบภาษาไทย
+                const dateFormatter = new Intl.DateTimeFormat('th-TH', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                issueDateFormatted = dateFormatter.format(dateObj);
+            }
+        }
+
+        // 2. ตั้งค่า Response Headers สำหรับ PDF Download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="certificate_${userId}_${courseId}.pdf"`);
+
+        // 3. สร้าง PDF Document
+        const doc = new PDFDocument({
+            layout: 'landscape', // แนวนอน
+            size: 'A4',
+            autoFirstPage: false
+        });
+
+        // Pipe PDF output ไปที่ Response stream ทันที
+        doc.pipe(res);
+        doc.addPage();
+
+        const PADDING = 50;
+        const DOC_WIDTH = doc.page.width;
+        const DOC_HEIGHT = doc.page.height;
+        const primaryColor = '#2E7D32';
+        const IMAGE_HEIGHT = 80; // กำหนดความสูงของโลโก้
+
+        // --- ส่วนการตกแต่ง (Border) ---
+        doc.rect(PADDING / 2, PADDING / 2, DOC_WIDTH - PADDING, DOC_HEIGHT - PADDING)
+            .lineWidth(5)
+            .stroke(primaryColor);
+
+        // --- ส่วนเนื้อหา ---
+
+        let nextY = 80; // ตำแหน่งเริ่มต้น Y ที่ใช้สำหรับโลโก้
+
+        if (fs.existsSync(LOGO_PATH)) {
+            const imageX = (DOC_WIDTH - IMAGE_HEIGHT) / 2;
+            doc.image(LOGO_PATH, imageX, nextY, {
+                height: IMAGE_HEIGHT
+            });
+
+            // 💡 [FIX] กำหนดตำแหน่ง Y สำหรับข้อความถัดไป โดยบวกความสูงของรูปภาพและระยะห่างเพิ่ม
+            nextY += IMAGE_HEIGHT + 30; // 80 (เริ่มต้น) + 80 (ความสูงรูป) + 30 (ระยะห่าง) = 190
+
+            // ใช้ doc.moveDown() เพื่อให้ Cursor อยู่ในตำแหน่งที่ถูกต้องสำหรับ doc.text() ถัดไป
+            doc.y = nextY;
+            doc.moveDown(0.5); // moveDown 0.5 เพื่อให้ cursor พร้อมสำหรับข้อความถัดไป
+
+        } else {
+            // กรณีไม่พบโลโก้ (Fallback)
+            doc.font(BOLD_FONT)
+                .fontSize(48)
+                .fillColor(primaryColor)
+                .text('วุฒิบัตร', PADDING, nextY, { align: 'center', width: DOC_WIDTH - PADDING * 2 });
+            doc.moveDown(0.5);
+            nextY = doc.y; // อัปเดต nextY ตามตำแหน่งของ Cursor ปัจจุบัน
+        }
+
+        // 2. ข้อความรับรอง (ปกติ)
+        doc.font(NORMAL_FONT)
+            .fontSize(20)
+            .fillColor('#333333')
+            .text('ประกาศนียบัตรนี้ให้ไว้เพื่อรับรองว่า', { align: 'center' });
+
+        doc.moveDown(0.5);
+
+        // 3. ชื่อผู้ได้รับวุฒิบัตร (ตัวหนา)
+        doc.font(BOLD_FONT)
+            .fontSize(36)
+            .fillColor(primaryColor)
+            .text(fullName, { align: 'center' });
+
+        doc.moveDown(0.5);
+
+        // 4. ข้อความจบหลักสูตร (ปกติ)
+        doc.font(NORMAL_FONT)
+            .fontSize(20)
+            .fillColor('#333333')
+            .text('ได้ผ่านการอบรมและประเมินผลหลักสูตร', { align: 'center' });
+
+        doc.moveDown(0.5);
+
+        // 5. ชื่อหลักสูตร (ตัวหนา)
+        doc.font(BOLD_FONT)
+            .fontSize(28)
+            .fillColor(primaryColor)
+            .text(data.course_name, { align: 'center' });
+
+        doc.moveDown(0.2);
+
+        // 6. ชื่อหลักสูตรย่อย (ปกติ)
+        doc.font(NORMAL_FONT)
+            .fontSize(20)
+            .fillColor(primaryColor)
+            .text(`(${data.subject_name})`, { align: 'center' });
+
+        doc.moveDown(2);
+
+        // 7. วันที่ออกวุฒิบัตร (ปกติ)
+        doc.font(NORMAL_FONT)
+            .fontSize(20)
+            .fillColor('#333333')
+            .text(`ให้ไว้ ณ วันที่: ${issueDateFormatted}`, { align: 'center' });
+
+        doc.moveDown(3);
+
+        // สิ้นสุดการเขียน PDF
+        doc.end();
+
+    } catch (error) {
+        console.error('🛑 ERROR generating certificate PDF:', error);
+        res.status(500).json({ message: 'Internal server error during PDF generation.', details: error.message });
+    }
+});
+
+app.get('/api/certificates/:userId', async (req, res) => {
+    const userId = req.params.userId;
+
+    // 💡 LOGGING: ตรวจสอบว่า API ถูกเรียกใช้
+    console.log(`[API] Attempting to fetch certificates for User ID: ${userId}`);
+
+    try {
+        // 🎯 [SQL Query] (ตรวจสอบชื่อตารางและคอลัมน์ใน DB ของคุณ)
+        // ตรวจสอบว่าชื่อตาราง "certificates" และ "courses" สะกดถูกต้อง
+        const certificateQuery = `
+            SELECT 
+                cert.course_id, 
+                c.course_code, 
+                c.course_name, 
+                c.course_code AS subject_name, /* ใช้ course_code เป็น subject_name */
+                TO_CHAR(cert.issue_date, 'YYYY-MM-DD') AS issue_date 
+            FROM 
+                certificates cert  
+            JOIN 
+                courses c ON cert.course_id = c.course_id 
+            WHERE 
+                cert.user_id = $1
+            ORDER BY 
+                cert.issue_date DESC;
+        `;
+
+        const result = await pool.query(certificateQuery, [userId]);
+
+        // 💡 LOGGING: ตรวจสอบว่า Query สำเร็จและมีกี่แถว
+        console.log(`[API Success] Fetched ${result.rows.length} certificates for user ${userId}`);
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+        // 🛑 LOGGING: ดักจับข้อผิดพลาด (ถ้าเกิดขึ้น)
+        console.error('🛑 FATAL ERROR fetching user certificates (500 Error Cause):', error.message);
+        console.error('SQL State:', error.code); // พิมพ์ SQL Error Code (เช่น 42P01: relation does not exist)
+
+        // ส่งข้อความ 500 กลับไป
+        return res.status(500).json({
+            message: 'Internal server error while fetching certificates.',
+            error: error.message
+        });
+    }
+});
+
+// ✅ ENDPOINT 2: ดึงรายละเอียดวุฒิบัตรเฉพาะใบ (สำหรับ CertificatePage)
+app.get('/api/certificates/:userId/:courseId', async (req, res) => {
+    const { userId, courseId } = req.params;
+    console.log(`[API] Attempting to fetch details for User ID: ${userId}, Course ID: ${courseId}`);
+
+    try {
+        const detailQuery = `
+            SELECT 
+                c.course_name, 
+                c.course_code AS subject_name, 
+                u.first_name, 
+                u.last_name,
+                TO_CHAR(cert.issue_date, 'YYYY-MM-DD') AS issue_date
+            FROM 
+                courses c
+            JOIN 
+                certificates cert ON cert.course_id = c.course_id 
+            JOIN
+                users u ON u.user_id = cert.user_id
+            WHERE 
+                cert.user_id = $1 AND cert.course_id = $2;
+        `;
+
+        const result = await pool.query(detailQuery, [userId, courseId]);
+
+        if (result.rows.length === 0) {
+            console.warn(`[API Warning] Certificate details not found for user ${userId} and course ${courseId}`);
+            return res.status(404).json({ message: 'Certificate data not found.' });
+        }
+
+        const data = result.rows[0];
+        console.log(`[API Success] Fetched details for ${data.first_name}`);
+
+        const responseData = {
+            firstName: data.first_name,
+            lastName: data.last_name || '',
+            subjectName: data.subject_name || data.course_name || 'ไม่ระบุหลักสูตรย่อย',
+            courseName: data.course_name,
+            issueDate: data.issue_date,
+        };
+
+        res.json(responseData);
+
+    } catch (error) {
+        console.error('🛑 FATAL ERROR fetching certificate details:', error.message);
+        res.status(500).json({ message: 'Internal server error while fetching certificate details.' });
+    }
+});
+
+
+// ENDPOINT: ดึงข้อมูลโปรไฟล์ผู้ใช้ตาม ID (GET /api/users/:userId)
+app.get('/api/users/:userId', async (req, res) => {
+    const { userId } = req.params;
+
+    // 💡 [Step 1] ตรวจสอบความถูกต้องของ userId
+    const userIdInt = parseInt(userId);
+    if (isNaN(userIdInt)) {
+        return res.status(400).json({ message: 'Invalid User ID format.' });
+    }
+
+    try {
+        // 💡 [Step 2] Query ข้อมูลที่จำเป็นจากตาราง users
+        // ดึงเฉพาะ field ที่จำเป็น ไม่รวม password_hash
+        const query = `
+            SELECT 
+                user_id, 
+                first_name, 
+                last_name, 
+                email, 
+                role, 
+                student_id
+            FROM users
+            WHERE user_id = $1
+        `;
+
+        const result = await pool.query(query, [userIdInt]);
+        const user = result.rows[0];
+
+        if (!user) {
+            // 💡 [Step 3] ไม่พบผู้ใช้
+            return res.status(404).json({ message: `User with ID ${userId} not found.` });
+        }
+
+        // 💡 [Step 4] คืนค่าข้อมูลผู้ใช้ในรูปแบบ JSON
+        return res.status(200).json(user);
+
+    } catch (error) {
+        console.error('🛑 ERROR fetching user profile:', error);
+        return res.status(500).json({ message: 'Internal server error while fetching user profile.', error: error.message });
+    }
+});
 
 // ✅ Reports Endpoints
-// Endpoint สำหรับส่งรายงานปัญหา
 app.post('/api/reports', async (req, res) => {
     const { userId, category, reportMess } = req.body;
     try {
@@ -681,8 +1175,320 @@ app.post('/api/reports', async (req, res) => {
     }
 });
 
+// ✅ User Profile Endpoint (Existing)
+app.get('/api/user-professor/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId); // 💡 [Step 1] ดึง userId
+    try {
+        // 💡 [Step 2] Query ดึงข้อมูลผู้ใช้จาก users table โดยใช้ user_id
+        const userQuery = 'SELECT user_id, first_name, last_name, email, role, student_id FROM users WHERE user_id = $1';
+        const result = await pool.query(userQuery, [userId]);
+        const user = result.rows[0];
 
-// 💡 ลบส่วน Mongoose และ module.exports = router ที่ทำให้เกิด Error ออกแล้ว
+        if (!user) {
+            // 💡 [Step 3] ไม่พบผู้ใช้
+            return res.status(404).json({ message: `User with ID ${userId} not found.` });
+        }
+
+        // 💡 [Step 4] คืนค่าข้อมูลผู้ใช้ในรูปแบบ JSON
+        return res.status(200).json(user);
+
+    } catch (error) {
+        console.error('🛑 ERROR fetching user profile:', error);
+        return res.status(500).json({ message: 'Internal server error while fetching user profile.', error: error.message });
+    }
+});
+
+
+// **ENDPOINT ที่ 9: ดึงรายการคอร์สที่อาจารย์ (ผู้ใช้) สร้างขึ้นทั้งหมด (สำหรับหน้า Profile ของอาจารย์)**
+app.get('/api/professor/courses/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    // ดึง port จาก environment variable หรือใช้ค่า default
+    const port = process.env.PORT || 3006;
+    const hostname = req.hostname; // ใช้ hostname จาก request (เช่น localhost)
+
+    try {
+        // 💡 แก้ไข: เพิ่ม name_image และ JOIN users เพื่อดึงชื่ออาจารย์ และใช้ WHERE clause กรองด้วย user_id
+        const coursesQuery = `
+            SELECT 
+                c.course_id,
+                c.course_name,
+                c.course_code,
+                c.name_image,
+                c.user_id,
+                u.first_name,
+                u.last_name
+            FROM courses c
+            JOIN users u ON c.user_id = u.user_id 
+            WHERE c.user_id = $1; 
+        `;
+        const result = await pool.query(coursesQuery, [userId]);
+
+        if (result.rows.length === 0) {
+            // หากไม่พบคอร์สใด ๆ จะส่ง Array เปล่ากลับไป
+            return res.status(200).json([]);
+        }
+
+        // 💡 เพิ่ม: การประมวลผลข้อมูลเพื่อสร้าง image_url และ professor_name
+        const courses = result.rows.map(row => {
+            const imageUrl = row.name_image
+                ? `http://${hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${row.name_image}`
+                : 'https://placehold.co/300x150/505050/FFFFFF?text=IT+Course'; // ภาพสำรอง
+
+            return {
+                course_id: row.course_id.toString(),
+                course_code: row.course_code,
+                course_name: row.course_name,
+                image_url: imageUrl, // ชื่อ key ต้องตรงกับที่ ProfessorCourse.fromJson คาดหวัง
+                professor_name: `${row.first_name} ${row.last_name}`
+            };
+        });
+
+        // ส่งรายการคอร์สที่พบกลับไป
+        return res.status(200).json(courses);
+    } catch (error) {
+        console.error('🛑 ERROR fetching professor courses:', error);
+        return res.status(500).json({
+            message: 'Internal server error: Cannot fetch professor courses.',
+            error: error.message
+        });
+    }
+});
+
+// 1. GET /api/reports/pending
+app.get('/api/reports/pending', async (req, res) => {
+    try {
+        // *** แก้ไข: ใช้ pool.query แทน db.query ***
+        const result = await pool.query(` 
+            SELECT 
+                report_id, 
+                user_id, 
+                category, 
+                report_mess,
+                status
+            FROM public.reports
+            WHERE status IS NULL OR status = 'รอดำเนินการ' OR status = 'Pending'
+            ORDER BY report_id ASC
+        `);
+
+        // ส่งข้อมูลรายงานกลับไป
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching pending reports:', err);
+        // การ Log นี้จะแสดง Error ที่แท้จริงใน Console ของ Server
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// 2. PUT /api/reports/:reportId/resolve
+app.put('/api/reports/:reportId/resolve', async (req, res) => {
+    const reportId = req.params.reportId;
+    const { status } = req.body; // รับ status ('เสร็จสิ้น') จาก Flutter
+
+    if (status !== 'เสร็จสิ้น') {
+        return res.status(400).json({ message: 'Invalid status provided' });
+    }
+
+    try {
+        // อัปเดตตาราง reports
+        const updateReportQuery = `
+            UPDATE public.reports
+            SET status = $1
+            WHERE report_id = $2
+            RETURNING *;
+        `;
+
+        // *** แก้ไข: ใช้ pool.query แทน db.query ***
+        const result = await pool.query(updateReportQuery, [status, reportId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Report not found' });
+        }
+
+        // ส่งการตอบกลับสำเร็จ
+        res.status(200).json({ message: `Report ${reportId} resolved successfully`, report: result.rows[0] });
+
+    } catch (err) {
+        console.error('Error resolving report:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// 3. GET /api/users - ดึงข้อมูลผู้ใช้ทั้งหมด
+app.get('/api/users-admin', async (req, res) => {
+    try {
+        // เลือกข้อมูลที่ต้องการ: ชื่อ, นามสกุล, อีเมล, รหัสนิสิต, บทบาท
+        const query = `
+            SELECT 
+                user_id, first_name, last_name, email, student_id, role
+            FROM 
+                public.users
+            ORDER BY
+                user_id; 
+        `;
+
+        const result = await pool.query(query);
+
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching all users:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// **ENDPOINT: PUT /api/users-admin/:userId (Update user)**
+app.put('/api/users-admin/:userId', async (req, res) => {
+    // 1. รับ ID ผู้ใช้จาก URL Parameter และแปลงเป็นตัวเลข
+    const userId = parseInt(req.params.userId, 10); 
+
+    // 2. รับข้อมูลจาก Body
+    const { first_name, last_name, email, student_id, role } = req.body;
+
+    // 3. จัดการ student_id ที่เป็นค่าว่าง (String ว่าง -> NULL)
+    const finalStudentId = (student_id === '' || student_id === undefined || student_id === null)
+        ? null
+        : student_id;
+
+    // 3.5 ตรวจสอบ User ID ที่แปลงแล้ว
+    if (isNaN(userId)) {
+        return res.status(400).json({ message: 'User ID ไม่ถูกต้อง หรือไม่มีการส่ง ID มา' });
+    }
+
+    try {
+        // 4. คำสั่ง SQL สำหรับอัปเดตข้อมูล
+        const query = `
+            UPDATE public.users
+            SET 
+                first_name = $1,
+                last_name = $2,
+                email = $3,
+                student_id = $4,
+                role = $5
+            WHERE 
+                user_id = $6
+            RETURNING user_id;
+        `;
+        
+        // 5. ส่งคำสั่งไปยังฐานข้อมูล
+        const values = [first_name, last_name, email, finalStudentId, role, userId];
+        const result = await pool.query(query, values);
+
+        // 6. ตรวจสอบว่ามีแถวข้อมูลถูกอัปเดตหรือไม่
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'ไม่พบผู้ใช้ที่ต้องการแก้ไข' });
+        }
+
+        // 7. ส่งคำตอบสำเร็จ
+        res.status(200).json({ message: 'อัปเดตข้อมูลผู้ใช้สำเร็จ' });
+
+    } catch (err) {
+        console.error('Error updating user:', err);
+        
+        // 🚨 การแก้ไข CRITICAL: จัดการ Unique Constraint Violation (Error Code: 23505)
+        if (err.code === '23505') {
+            let field = 'ข้อมูล';
+            if (err.constraint === 'users_email_key') {
+                field = 'อีเมล';
+            } else if (err.constraint === 'users_student_id_key') {
+                field = 'รหัสนิสิต';
+            }
+            return res.status(409).json({ 
+                message: `${field} ที่คุณระบุมีผู้ใช้งานอยู่แล้ว กรุณาใช้ ${field} อื่น` 
+            });
+        }
+
+        // ส่ง Error ที่แท้จริงจาก Postgres กลับไป
+        const errorMessage = err.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะอัปเดตข้อมูล'; 
+        res.status(500).json({ message: errorMessage });
+    }
+});
+
+// เส้น API: GET /api/courses-admin
+app.get('/api/courses-admin', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.course_id,          
+                c.course_code,       
+                c.user_id AS instructor_id, 
+                u.email,              
+                u.first_name || ' ' || u.last_name AS instructor_name 
+            FROM courses c
+            LEFT JOIN users u ON c.user_id = u.user_id   
+            ORDER BY c.course_id DESC;
+        `;
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching courses:', err); 
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลคอร์ส' });
+    }
+});
+
+// 2. PUT: อัปเดตข้อมูลคอร์ส (Update Course)
+// เส้น API: PUT /api/courses-admin/:courseId
+app.put('/api/courses-admin/:courseId', async (req, res) => {
+    const courseId = req.params.courseId;
+    // รับเฉพาะ course_code
+    const { course_code } = req.body; 
+
+    if (!course_code) {
+        return res.status(400).json({ message: 'กรุณากรอกรหัสวิชา' });
+    }
+
+    try {
+        // Query สำหรับอัปเดตแค่ course_code
+        const query = `
+            UPDATE courses
+            SET 
+                course_code = $1     
+            WHERE course_id = $2
+            RETURNING course_id;
+        `;
+        
+        const values = [course_code, courseId]; // ใช้แค่ course_code และ courseId
+        const result = await pool.query(query, values);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'ไม่พบข้อมูลคอร์สที่ต้องการแก้ไข' });
+        }
+
+        res.status(200).json({ message: 'อัปเดตข้อมูลคอร์สสำเร็จ' });
+
+    } catch (err) {
+        console.error('Error updating course:', err);
+        
+        // จัดการ Unique Constraint Violation
+        if (err.code === '23505') {
+            let field = 'ข้อมูล';
+            if (err.constraint === 'courses_course_code_key') {
+                field = 'รหัสวิชา';
+            }
+            return res.status(409).json({ 
+                message: `${field} ที่คุณระบุมีอยู่แล้ว กรุณาใช้ ${field} อื่น` 
+            });
+        }
+        
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลคอร์ส' });
+    }
+});
+
+// 3. GET: ดึงข้อมูลอาจารย์ทั้งหมดสำหรับ Dropdown (Teacher List)
+// **ยังคงเก็บ Endpoint นี้ไว้เผื่อใช้ในหน้าอื่นๆ หรือเผื่อเปลี่ยนใจ**
+app.get('/api/teachers', async (req, res) => {
+    try {
+        const query = `
+            SELECT user_id, first_name || ' ' || last_name AS name
+            FROM users
+            WHERE role = 'อาจารย์'
+            ORDER BY name;
+        `;
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching teachers:', err);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลอาจารย์' });
+    }
+});
 
 // เริ่มต้นเซิร์ฟเวอร์
 app.listen(port, () => {

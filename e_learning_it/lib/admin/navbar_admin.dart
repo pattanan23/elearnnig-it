@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:e_learning_it/login_page.dart';
 // 1. Import the new ProfilePage
-import 'package:e_learning_it/student_outsiders/profile_page.dart';
+import 'package:e_learning_it/professor/professor_profile_page.dart';
 
-class NavbarPage extends StatelessWidget implements PreferredSizeWidget {
+class NavbarAdminPage extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
   final String userId;
 
-  const NavbarPage({super.key, required this.userName, required this.userId});
+  const NavbarAdminPage({super.key, required this.userName, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +25,7 @@ class NavbarPage extends StatelessWidget implements PreferredSizeWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ProfilePage(
+                  builder: (context) => ProfessorProfilePage(
                     userName: userName,
                     userId: userId,
                   ),
