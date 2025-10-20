@@ -7,6 +7,7 @@ import 'error_dialog_page.dart'; // Import หน้า Dialog Box ที่ส�
 import 'login/membership.dart'; // Import หน้า MembershipPage
 import 'professor/main_professor_page.dart'; // Import หน้าสำหรับอาจารย์
 import 'admin/admin_login_page.dart';
+import 'login/reset_password_request.dart'; // 💡 NEW: Import หน้าขอรีเซ็ตรหัสผ่าน
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,12 +44,11 @@ class _LoginScreenState extends State<LoginScreen> {
           final userName = responseData['user']['first_name'] + ' ' + responseData['user']['last_name']; // ดึงชื่อผู้ใช้
           final userId = responseData['user']['user_id']; // ดึง user_id
           
-
           // ตรวจสอบ role และนำทางไปยังหน้าตามที่กำหนด
           if (userRole == 'อาจารย์') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) =>  MainProfessorPage(userName: userName, userId: userId),
+                builder: (context) => MainProfessorPage(userName: userName, userId: userId),
               ),
             );
           } else {
@@ -105,6 +105,8 @@ class _LoginScreenState extends State<LoginScreen> {
             horizontal: isMobile ? 24.0 : (screenWidth * 0.1),
             vertical: 24.0,
           ),
+          // เนื่องจาก ResponsiveLayout เป็น Widget ภายนอกที่ไม่ทราบโค้ด จึงคงไว้
+          // แต่ถ้า ResponsiveLayout คือโค้ดที่คุณเคยให้มา อาจจะต้องใช้ Container แทน
           child: ResponsiveLayout(
             registrationForm: _buildLoginForm(),
           ),
@@ -175,28 +177,61 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // เพิ่มข้อความและลิงก์สำหรับสมัครสมาชิก
-          TextButton(
-            onPressed: () {
-              // นำทางไปที่หน้า MembershipPage
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const MemberScreen(),
+          
+          // 💡 แก้ไข: รวมปุ่ม "สมัครสมาชิก" และ "ลืมรหัสผ่าน" ไว้ใน Row เดียวกันและจัดให้อยู่ตรงกลาง
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center, // จัดให้อยู่ตรงกลาง
+            children: [
+              // ปุ่มสมัครสมาชิก
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const MemberScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'สมัครสมาชิก',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 16,
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
-              );
-            },
-            child: const Text(
-              'สมัครสมาชิก', // ข้อความที่คุณขอ
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 16,
-                decoration: TextDecoration.underline, // เพิ่มขีดเส้นใต้เพื่อให้ดูเหมือนลิงก์
               ),
-            ),
+              
+              const Text(
+                ' | ', // ตัวคั่น
+                style: TextStyle(color: Colors.grey),
+              ),
+
+              // ปุ่มลืมรหัสผ่าน
+              TextButton(
+                onPressed: () {
+                  // นำทางไปที่หน้า Reset Password Request
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const ResetPasswordRequestScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'ลืมรหัสผ่าน?',
+                  style: TextStyle(
+                    color: Color.fromARGB(255, 203, 147, 73),
+                    fontSize: 16,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
           ),
+          
+          // ปุ่มระบบผู้ดูแล (ยังคงอยู่ด้านล่างสุด)
           TextButton(
             onPressed: () {
-              // นำทางไปที่หน้า MembershipPage
+              // นำทางไปที่หน้า AdminLoginPage
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const AdminLoginPage(),

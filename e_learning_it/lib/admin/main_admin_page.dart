@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'error_dialog_page.dart'; // Assume this file exists for error popups
+import 'error_dialog_page.dart';
 import 'navbar_admin.dart';
 import 'drawer_admin.dart';
 
@@ -23,7 +23,6 @@ class AdminMainPage extends StatefulWidget {
 }
 
 class _AdminMainPageState extends State<AdminMainPage> {
-  // List to hold the report data
   List<dynamic> _reports = [];
   bool _isLoading = true;
 
@@ -34,7 +33,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
   }
 
   // -----------------------------------------------------
-  // 1. API: FETCH REPORTS
+  // Data Fetching Logic ( unchanged )
   // -----------------------------------------------------
   Future<void> _fetchReports() async {
     setState(() {
@@ -48,7 +47,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
       if (response.statusCode == 200) {
         final List<dynamic> fetchedReports = jsonDecode(response.body);
         setState(() {
-          // กรองรายงานที่มีสถานะเป็น 'รอดำเนินการ' หรือ 'Pending' (ตามค่าเริ่มต้นที่ตั้งไว้)
+          // กรองรายงานที่มีสถานะเป็น 'รอดำเนินการ' หรือ 'Pending'
           _reports = fetchedReports
               .where((report) =>
                   report['status'] == null ||
@@ -73,7 +72,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
   }
 
   // -----------------------------------------------------
-  // 2. API: UPDATE STATUS
+  // Status Update Logic ( unchanged )
   // -----------------------------------------------------
   Future<void> _updateReportStatus(int reportId, int index) async {
     try {
@@ -112,6 +111,9 @@ class _AdminMainPageState extends State<AdminMainPage> {
     }
   }
 
+  // -----------------------------------------------------
+  // Helper Function ( unchanged )
+  // -----------------------------------------------------
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -122,64 +124,7 @@ class _AdminMainPageState extends State<AdminMainPage> {
   }
 
   // -----------------------------------------------------
-  // 3. UI: REPORT CARD Widget
-  // -----------------------------------------------------
-  Widget _buildReportCard(Map<String, dynamic> report, int index) {
-    // ใช้ report_id และ user_id จากฐานข้อมูล
-    final reportId = report['report_id'];
-    final userId = report['user_id'];
-    final category = report['category'] ?? 'N/A';
-    final message = report['report_mess'] ?? 'ไม่มีข้อความ';
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ส่วนแสดงรายละเอียด (คล้ายกับรูปแบบของรูปภาพ)
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'เรื่อง: $category', // ใช้ category เป็นชื่อเรื่อง
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 5),
-                  Text('User ID ผู้แจ้ง: $userId'),
-                  const SizedBox(height: 10),
-                  Text('รายละเอียด: $message',
-                      style: const TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 20),
-            // ปุ่ม "เสร็จสิ้น"
-            Align(
-              alignment: Alignment.topRight,
-              child: ElevatedButton(
-                onPressed: () => _updateReportStatus(reportId, index),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                ),
-                child: const Text('เสร็จสิ้น', style: TextStyle(fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // -----------------------------------------------------
-  // 4. UI: BUILD METHOD
+  // Build Method ( restructured for better readability )
   // -----------------------------------------------------
   @override
   Widget build(BuildContext context) {
@@ -192,19 +137,160 @@ class _AdminMainPageState extends State<AdminMainPage> {
         userName: widget.userName,
         userId: widget.userId,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _reports.isEmpty
-              ? const Center(
-                  child: Text('ไม่มีรายงานที่รอดำเนินการ',
-                      style: TextStyle(fontSize: 18, color: Colors.grey)),
-                )
-              : ListView.builder(
-                  itemCount: _reports.length,
-                  itemBuilder: (context, index) {
-                    return _buildReportCard(_reports[index], index);
-                  },
+      body: Container(
+        color: const Color(0xFFF0F2F5), // เพิ่มสีพื้นหลังเพื่อให้ดูดีขึ้น
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.notifications,
+                    color: Color(0xFF4CAF50),
+                    size: 32,
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'แจ้งปัญหา',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _buildBody(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_reports.isEmpty) {
+      return const Center(
+        child: Text(
+          'ไม่มีรายงานที่รอดำเนินการ',
+          style: TextStyle(fontSize: 18, color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      itemCount: _reports.length,
+      itemBuilder: (context, index) {
+        // ใช้ ReportCard Widget แยกออกมา
+        return ReportCard(
+          report: _reports[index],
+          index: index,
+          onResolve: _updateReportStatus,
+        );
+      },
+    );
+  }
+}
+
+// -----------------------------------------------------
+// New Widget: ReportCard (for UI separation)
+// -----------------------------------------------------
+class ReportCard extends StatelessWidget {
+  final Map<String, dynamic> report;
+  final int index;
+  final Function(int reportId, int index) onResolve;
+
+  const ReportCard({
+    super.key,
+    required this.report,
+    required this.index,
+    required this.onResolve,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // ใช้ report_id และ user_id จากฐานข้อมูล
+    final reportId = report['report_id'];
+    final userId = report['user_id'] ?? 'N/A';
+    final category = report['category'] ?? 'N/A';
+    final message = report['report_mess'] ?? 'ไม่มีข้อความ';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      elevation: 2, // เพิ่มเงาเล็กน้อย
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'เรื่อง: $category', // ใช้ category เป็นชื่อเรื่อง
+                    style: const TextStyle(
+                      fontSize: 18, 
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  // แสดง User ID
+                  Text('User ID ผู้แจ้ง: $userId', style: const TextStyle(color: Colors.grey)), 
+                  const SizedBox(height: 10),
+                  // รายละเอียดปัญหา
+                  Text(
+                    'รายละเอียด: $message',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF666666)
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20),
+            // ปุ่ม "เสร็จสิ้น"
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50), // สีเขียวที่ใช้ในรูป
+                borderRadius: BorderRadius.circular(5.0),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onResolve(reportId, index), // เรียกใช้ callback
+                  borderRadius: BorderRadius.circular(5.0),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    child: Text(
+                      'เสร็จสิ้น', 
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

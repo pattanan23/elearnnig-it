@@ -13,6 +13,7 @@ const { v4: uuidv4 } = require('uuid');
 const ffmpeg = require('fluent-ffmpeg');
 const os = require('os');
 const PDFDocument = require('pdfkit');
+const nodemailer = require('nodemailer');
 
 // Ensure ffmpeg paths are correct for your system
 ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
@@ -47,6 +48,47 @@ pool.connect((err, client, done) => {
     console.log('Connected to PostgreSQL database successfully!');
     done();
 });
+
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com', // ใช้ Gmail SMTP
+    port: 465, // พอร์ตสำหรับ SSL
+    secure: true, // ต้องเป็น true สำหรับ port 465
+    auth: {
+        user: process.env.EMAIL_USER, // อีเมลผู้ส่งจาก .env
+        pass: process.env.EMAIL_PASS, // App Password จาก .env
+    },
+});
+
+function generateOTP() {
+    return Math.floor(10000 + Math.random() * 90000).toString();
+}
+async function sendOTPEmail(toEmail, otpCode) {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: toEmail,
+        subject: 'รหัส OTP สำหรับการรีเซ็ตรหัสผ่าน E-Learning IT',
+        html: `
+            <div style="font-family: Arial, sans-serif;">
+                <h2 style="color: #4CAF50;">การร้องขอรีเซ็ตรหัสผ่าน</h2>
+                <p>รหัส OTP ของคุณคือ:</p>
+                <div style="font-size: 24px; font-weight: bold; color: #333; background-color: #f0f0f0; padding: 10px; display: inline-block; margin: 10px 0;">
+                    ${otpCode}
+                </div>
+                <p>รหัสนี้จะหมดอายุภายใน 10 นาที</p>
+            </div>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`OTP email sent successfully to ${toEmail}`); // 💡 SUCCESS: แสดงว่าส่งจริงสำเร็จ
+        return true;
+    } catch (error) {
+        console.error(`🛑 Error sending OTP email to ${toEmail}:`, error); // 🛑 FAILURE: แสดงข้อผิดพลาดจริงของ SMTP
+        return false;
+    }
+}
+
 
 // Endpoint สำหรับเข้าสู่ระบบ
 app.post('/api/login', async (req, res) => {
@@ -1425,7 +1467,6 @@ app.get('/api/courses-admin', async (req, res) => {
 });
 
 // 2. PUT: อัปเดตข้อมูลคอร์ส (Update Course)
-// เส้น API: PUT /api/courses-admin/:courseId
 app.put('/api/courses-admin/:courseId', async (req, res) => {
     const courseId = req.params.courseId;
     // รับเฉพาะ course_code
@@ -1473,7 +1514,6 @@ app.put('/api/courses-admin/:courseId', async (req, res) => {
 });
 
 // 3. GET: ดึงข้อมูลอาจารย์ทั้งหมดสำหรับ Dropdown (Teacher List)
-// **ยังคงเก็บ Endpoint นี้ไว้เผื่อใช้ในหน้าอื่นๆ หรือเผื่อเปลี่ยนใจ**
 app.get('/api/teachers', async (req, res) => {
     try {
         const query = `
@@ -1487,6 +1527,134 @@ app.get('/api/teachers', async (req, res) => {
     } catch (err) {
         console.error('Error fetching teachers:', err);
         res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลอาจารย์' });
+    }
+});
+
+// 1. ENDPOINT: ร้องขอรหัส OTP สำหรับรีเซ็ตรหัสผ่าน
+app.post('/api/password/request_reset', async (req, res) => {
+    const { identifier } = req.body; // รับ Email หรือรหัสนิสิต
+
+    if (!identifier) {
+        return res.status(400).json({ message: 'กรุณากรอก Email หรือรหัสนิสิต' });
+    }
+
+    try {
+        // 1. ค้นหาผู้ใช้จาก identifier
+        const userQuery = `
+            SELECT user_id, email, first_name
+            FROM users 
+            WHERE email = $1 OR student_id = $1;
+        `;
+        const userResult = await pool.query(userQuery, [identifier]);
+
+        if (userResult.rows.length === 0) {
+            // ไม่พบผู้ใช้
+            return res.status(404).json({ message: 'ไม่พบผู้ใช้ที่ระบุในระบบ' });
+        }
+
+        const user = userResult.rows[0];
+        const otpCode = generateOTP();
+        // กำหนดเวลาหมดอายุ 10 นาที
+        const expirationTime = new Date(Date.now() + 10 * 60 * 1000); 
+
+        // 2. ลบ OTP เก่าของ User นี้ (ป้องกันการสแปม)
+        await pool.query('DELETE FROM password_resets WHERE user_id = $1', [user.user_id]);
+
+        // 3. บันทึก OTP ใหม่ลงในฐานข้อมูล
+        const insertOtpQuery = `
+            INSERT INTO password_resets (user_id, otp_code, expires_at)
+            VALUES ($1, $2, $3);
+        `;
+        await pool.query(insertOtpQuery, [user.user_id, otpCode, expirationTime]);
+
+        // 4. *** ส่วนส่งอีเมลจริง ***
+        const emailSent = await sendOTPEmail(user.email, otpCode);
+        
+        if (!emailSent) {
+            // ถ้าส่งไม่สำเร็จ ให้ส่ง 500 กลับไปพร้อมข้อความแจ้งผู้ใช้
+            return res.status(500).json({ 
+                message: 'เกิดข้อผิดพลาดในการส่งอีเมล OTP (โปรดตรวจสอบ App Password และการเชื่อมต่อของ Server)' 
+            });
+        }
+        
+        // 5. ส่งการตอบกลับ
+        res.status(200).json({
+            message: 'ส่งรหัส OTP ไปยังอีเมลเรียบร้อยแล้ว กรุณาตรวจสอบอีเมลของคุณ'
+        });
+
+    } catch (error) {
+        console.error('🛑 ERROR during password reset request:', error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะร้องขอรหัสผ่าน' });
+    }
+});
+
+// 2. ENDPOINT: ตรวจสอบ OTP และรีเซ็ตรหัสผ่านใหม่
+app.post('/api/password/reset', async (req, res) => {
+    const { identifier, otp_code, new_password } = req.body;
+
+    if (!identifier || !otp_code || !new_password) {
+        return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน: Email/รหัสนิสิต, รหัส OTP, และรหัสผ่านใหม่' });
+    }
+    
+    // ใช้ Transaction เพื่อให้แน่ใจว่าการอัปเดตและลบเกิดขึ้นพร้อมกัน
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN'); // เริ่ม Transaction
+
+        // 1. ค้นหาผู้ใช้จาก identifier และดึง user_id
+        const userQuery = 'SELECT user_id FROM users WHERE email = $1 OR student_id = $1;';
+        const userResult = await client.query(userQuery, [identifier]);
+
+        if (userResult.rows.length === 0) {
+            await client.query('COMMIT'); 
+            return res.status(404).json({ message: 'ไม่พบผู้ใช้ที่ระบุ' });
+        }
+
+        const userId = userResult.rows[0].user_id;
+        
+        // 2. ตรวจสอบ OTP: ตรงกันหรือไม่ และยังไม่หมดอายุ (expires_at > NOW())
+        const otpCheckQuery = `
+            SELECT id
+            FROM password_resets
+            WHERE user_id = $1
+              AND otp_code = $2
+              AND expires_at > NOW();
+        `;
+        const otpResult = await client.query(otpCheckQuery, [userId, otp_code]);
+
+        if (otpResult.rows.length === 0) {
+            await client.query('COMMIT'); 
+            return res.status(401).json({ message: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว' });
+        }
+        
+        // 3. เข้ารหัสรหัสผ่านใหม่
+        const saltRounds = 10;
+        const newPasswordHash = await bcrypt.hash(new_password, saltRounds);
+
+        // 4. อัปเดตรหัสผ่านในตาราง users
+        const updatePasswordQuery = `
+            UPDATE users
+            SET password_hash = $1
+            WHERE user_id = $2;
+        `;
+        await client.query(updatePasswordQuery, [newPasswordHash, userId]);
+
+        // 5. ลบ OTP ที่ใช้ไปแล้วออกจากตาราง password_resets
+        const otpId = otpResult.rows[0].id;
+        await client.query('DELETE FROM password_resets WHERE id = $1', [otpId]);
+
+        // 6. Commit Transaction: ยืนยันการเปลี่ยนแปลงทั้งหมด
+        await client.query('COMMIT');
+
+        res.status(200).json({ message: 'รีเซ็ตรหัสผ่านสำเร็จ' });
+
+    } catch (error) {
+        await client.query('ROLLBACK'); // Rollback: ยกเลิกการเปลี่ยนแปลงทั้งหมดหากมี Error
+        console.error('🛑 ERROR during password reset process:', error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะรีเซ็ตรหัสผ่าน' });
+    } finally {
+        client.release(); // คืน Client สู่ Pool
     }
 });
 
