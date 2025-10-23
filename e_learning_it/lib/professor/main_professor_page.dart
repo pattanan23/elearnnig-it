@@ -49,27 +49,7 @@ class MainProfessorPage extends StatelessWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
-                child: const Align(
-                  alignment: Alignment.centerRight, // เปลี่ยนเป็น center
-                  child: Padding(
-                    padding: EdgeInsets.only(right: 300),
-                    child: Text(
-                      'หลักสูตรวิทยาศาสตรบัณฑิต สาขาวิชาเทคโนโลยีสารสนเทศ',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(1.0, 1.0),
-                            blurRadius: 3.0,
-                            color: Color.fromARGB(150, 0, 0, 0),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+
               ),
               const SizedBox(height: 16),
 
@@ -84,27 +64,6 @@ class MainProfessorPage extends StatelessWidget {
                       'assets/images/post2.png',
                     ),
                     fit: BoxFit.cover,
-                  ),
-                ),
-                child: const Align(
-                  alignment: Alignment.centerLeft, // เปลี่ยนเป็น center
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 150),
-                    child: Text(
-                      'ยินดีต้อนรับสู่ระบบ E-Learning IT',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(1.0, 1.0),
-                            blurRadius: 3.0,
-                            color: Color.fromARGB(150, 0, 0, 0),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ),

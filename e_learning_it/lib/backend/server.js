@@ -1449,22 +1449,25 @@ app.get('/api/courses-admin', async (req, res) => {
     try {
         const query = `
             SELECT 
-                c.course_id,          
-                c.course_code,       
+                c.course_id, 
+                c.course_code, 
+                c.course_name,              
                 c.user_id AS instructor_id, 
-                u.email,              
+                u.email, 
                 u.first_name || ' ' || u.last_name AS instructor_name 
             FROM courses c
-            LEFT JOIN users u ON c.user_id = u.user_id   
+            LEFT JOIN users u ON c.user_id = u.user_id 
             ORDER BY c.course_id DESC;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (err) {
+        // ข้อความ Error ที่ถูกบันทึกไว้ใน console.error
         console.error('Error fetching courses:', err); 
         res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลคอร์ส' });
     }
 });
+
 
 // 2. PUT: อัปเดตข้อมูลคอร์ส (Update Course)
 app.put('/api/courses-admin/:courseId', async (req, res) => {

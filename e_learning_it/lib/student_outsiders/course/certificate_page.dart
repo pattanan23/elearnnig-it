@@ -61,6 +61,7 @@ class _CertificatePageState extends State<CertificatePage> {
   
   // สีหลัก
   final Color primaryColor = const Color(0xFF03A96B); 
+  // ⚠️ กรุณาเปลี่ยน URL นี้ตามสภาพแวดล้อมจริง
   final String _apiUrlBase = 'http://localhost:3006/api'; 
 
 
@@ -72,7 +73,23 @@ class _CertificatePageState extends State<CertificatePage> {
   }
 
   // ----------------------------------------------------------------------
-  // 📥 NEW FUNCTION: ดาวน์โหลดวุฒิบัตรเป็น PDF
+  // 📐 FUNCTION: คำนวณขนาดตัวอักษรแบบ Responsive
+  // จะลดขนาด font ลงเมื่อหน้าจอเล็กกว่า 600px โดยมี minScale เป็นการจำกัดขนาดต่ำสุด
+  // ----------------------------------------------------------------------
+  double _responsiveFontSize(double baseSize, {double minScale = 0.7}) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // กำหนด 600.0 เป็นจุดอ้างอิงความกว้างหน้าจอที่ใช้ baseSize เต็มที่
+    const double referenceWidth = 600.0; 
+    
+    // คำนวณ scale factor และจำกัดไม่ให้ scale เล็กกว่า minScale
+    double scale = (screenWidth / referenceWidth).clamp(minScale, 1.0);
+    
+    return baseSize * scale;
+  }
+
+
+  // ----------------------------------------------------------------------
+  // 📥 FUNCTION: ดาวน์โหลดวุฒิบัตรเป็น PDF
   // ----------------------------------------------------------------------
   Future<void> _downloadCertificatePdf() async {
     final downloadUrl = '$_apiUrlBase/certificates/pdf/${widget.userId}/${widget.courseId}';
@@ -129,6 +146,7 @@ class _CertificatePageState extends State<CertificatePage> {
             }
           }
         } else {
+          // ใช้ print แทน logging เพื่อความเรียบง่าย
           print('Failed to save issue date: ${response.body}');
         }
       } catch (e) {
@@ -184,12 +202,12 @@ class _CertificatePageState extends State<CertificatePage> {
   }
 
   // ----------------------------------------------------------------------
-  // 🎨 UI/BUILD METHOD
+  // 🎨 UI/BUILD METHOD (ใช้ Responsive Font Sizes ที่นี่)
   // ----------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     
-    // 1. แสดง Loading และ Error เหมือนเดิม
+    // 1. จัดการ Loading และ Error 
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('วุฒิบัตร', style: TextStyle(color: Colors.white)), backgroundColor: primaryColor),
@@ -213,6 +231,16 @@ class _CertificatePageState extends State<CertificatePage> {
       );
     }
     
+    // 2. 💡 กำหนดขนาด Responsive สำหรับ Text และ Container (FIX: เรียกใช้ฟังก์ชัน Responsive)
+    final double bodyTextSize = _responsiveFontSize(20, minScale: 0.85);
+    final double nameTextSize = _responsiveFontSize(34, minScale: 0.7);
+    final double courseNameSize = _responsiveFontSize(26, minScale: 0.75);
+    final double subjectNameSize = _responsiveFontSize(18, minScale: 0.85);
+    final double buttonTextSize = _responsiveFontSize(18, minScale: 0.9);
+    
+    // 💡 กำหนดความกว้างของกรอบวุฒิบัตรให้ Responsive (อย่างน้อย 300, ไม่เกิน 700)
+    final double certContainerWidth = MediaQuery.of(context).size.width.clamp(300.0, 700.0);
+    
 
     return Scaffold(
       appBar: AppBar(
@@ -229,7 +257,7 @@ class _CertificatePageState extends State<CertificatePage> {
                 // 1. กรอบวุฒิบัตร (Container หลัก)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
-                  width: MediaQuery.of(context).size.width * 0.5, 
+                  width: certContainerWidth, // 🎯 ใช้ความกว้างที่คำนวณแบบ Responsive
                   decoration: BoxDecoration(
                     border: Border.all(color: primaryColor, width: 5),
                     borderRadius: BorderRadius.circular(15),
@@ -240,23 +268,23 @@ class _CertificatePageState extends State<CertificatePage> {
                   ),
                   child: Column(
                     children: <Widget>[
-                      // 🎯 [แก้ไข] ส่วนหัว: ใส่โลโก้และลบข้อความ "วุฒิบัตร"
+                      // ส่วนหัว: โลโก้
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center, // จัดให้อยู่ตรงกลาง
+                        mainAxisAlignment: MainAxisAlignment.center, 
                         children: [
-                          // 💡 [FIX] ใช้ Image.asset แทน Icon/Text
+                          // 🎯 ปรับขนาดโลโก้ตามหน้าจอด้วย
                           Image.asset(
                             'assets/images/logo4.png', // ⚠️ **ต้องเปลี่ยน Path นี้ให้ตรงกับไฟล์ของคุณ**
-                            height: 80, // ปรับขนาดตามต้องการ
+                            height: 80 * (MediaQuery.of(context).size.width / 600).clamp(0.7, 1.0),
                           ), 
                         ],
                       ),
                       const SizedBox(height: 30),
                       
                       // ข้อความรับรอง
-                      const Text(
+                      Text(
                         'ประกาศนียบัตรนี้ให้ไว้เพื่อรับรองว่า',
-                        style: TextStyle(fontSize: 20, color: Colors.black54),
+                        style: TextStyle(fontSize: bodyTextSize, color: Colors.black54), // 🎯 ใช้ bodyTextSize
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 10),
@@ -265,7 +293,7 @@ class _CertificatePageState extends State<CertificatePage> {
                       Text(
                         _certData!.userName,
                         style: TextStyle(
-                            fontSize: 34,
+                            fontSize: nameTextSize, // 🎯 ใช้ nameTextSize
                             fontWeight: FontWeight.bold,
                             color: primaryColor,
                             fontStyle: FontStyle.italic,
@@ -276,9 +304,9 @@ class _CertificatePageState extends State<CertificatePage> {
                       const SizedBox(height: 10),
 
                       // ข้อความจบหลักสูตร
-                      const Text(
+                      Text(
                         'ได้ผ่านการอบรมและประเมินผลหลักสูตร',
-                        style: TextStyle(fontSize: 20, color: Colors.black54),
+                        style: TextStyle(fontSize: bodyTextSize, color: Colors.black54), // 🎯 ใช้ bodyTextSize
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 10),
@@ -287,7 +315,7 @@ class _CertificatePageState extends State<CertificatePage> {
                       Text(
                         _certData!.courseName,
                         style: TextStyle(
-                            fontSize: 26,
+                            fontSize: courseNameSize, // 🎯 ใช้ courseNameSize
                             fontWeight: FontWeight.bold,
                             color: primaryColor),
                         textAlign: TextAlign.center,
@@ -297,7 +325,7 @@ class _CertificatePageState extends State<CertificatePage> {
                       // ชื่อหลักสูตรย่อย
                       Text(
                         '(${_certData!.subjectName})',
-                        style: TextStyle(fontSize: 18, color: primaryColor),
+                        style: TextStyle(fontSize: subjectNameSize, color: primaryColor), // 🎯 ใช้ subjectNameSize
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 70), // เว้นช่องว่าง
@@ -314,10 +342,13 @@ class _CertificatePageState extends State<CertificatePage> {
                 ElevatedButton.icon(
                   onPressed: _certData != null ? _downloadCertificatePdf : null,
                   icon: const Icon(Icons.download, color: Colors.white),
-                  label: const Text('ดาวน์โหลดวุฒิบัตร PDF', style: TextStyle(fontSize: 18, color: Colors.white)),
+                  label: Text('ดาวน์โหลดวุฒิบัตร PDF', style: TextStyle(fontSize: buttonTextSize, color: Colors.white)), // 🎯 ใช้ buttonTextSize
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[800], 
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _responsiveFontSize(30, minScale: 0.9), // 🎯 ใช้ Responsive Padding
+                      vertical: _responsiveFontSize(15, minScale: 0.9) // 🎯 ใช้ Responsive Padding
+                    ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),

@@ -189,80 +189,6 @@ class _VdoPageState extends State<VdoPage> {
     }
   }
 
-  // 💡 [NEW FUNCTION] ฟังก์ชันแสดง Dialog ให้คะแนน
-  void _showRatingDialog() {
-    int _selectedRating = 5; // คะแนนเริ่มต้น
-    final TextEditingController _reviewController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text('ให้คะแนนคอร์สเรียน', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('คุณให้คะแนนคอร์สนี้กี่ดาว? (1-5)'),
-              const SizedBox(height: 12),
-              StatefulBuilder(
-                builder: (BuildContext context, StateSetter setStateInner) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (index) {
-                      final rating = index + 1;
-                      return IconButton(
-                        icon: Icon(
-                          rating <= _selectedRating ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 36,
-                        ),
-                        onPressed: () {
-                          setStateInner(() {
-                            _selectedRating = rating;
-                          });
-                        },
-                      );
-                    }),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _reviewController,
-                decoration: const InputDecoration(
-                  labelText: 'เขียนรีวิวเพิ่มเติม (ไม่บังคับ)',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                  alignLabelWithHint: true,
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _rateCourse(_selectedRating, _reviewController.text);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('ส่งคะแนน'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   // 💡 [MODIFIED FUNCTION] ดึงสถานะการดูจบแล้ว (เพื่อแสดง Checkmark เท่านั้น)
   Future<void> _fetchCompletedLessons() async {
     final uri = Uri.parse('$_apiGetAllProgressUrl/${widget.userId}/${widget.courseId}');
@@ -644,22 +570,7 @@ class _VdoPageState extends State<VdoPage> {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          // 💡 ส่วนนี้เพิ่มเข้ามา
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton.icon(
-              onPressed: _showRatingDialog,
-              icon: Icon(_isCourseRated ? Icons.star : Icons.star_border, color: Colors.white),
-              label: Text(_isCourseRated ? 'แก้ไข/ทบทวนคะแนน' : 'ให้คะแนนคอร์สเรียน'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
+        
           // 💡 สิ้นสุดส่วนที่เพิ่ม
           const SizedBox(height: 16),
           Text(
@@ -697,96 +608,121 @@ class _VdoPageState extends State<VdoPage> {
     );
   }
 
-  Widget _buildVideoControls() {
-    if (!_isControllerInitialized || !_controller.value.isInitialized) {
-      return const SizedBox.shrink();
-    }
+ Widget _buildVideoControls() {
+  if (!_isControllerInitialized || !_controller.value.isInitialized) {
+    return const SizedBox.shrink();
+  }
 
-    return Container(
-      color: Colors.black54,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          VideoProgressIndicator(
-            _controller,
-            allowScrubbing: true,
-            colors: const VideoProgressColors(
-                playedColor: Colors.red, bufferedColor: Colors.white54),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.replay_10, color: Colors.white, size: 28),
-                  onPressed: () {
-                    _seek(-10);
-                  },
-                ),
-                IconButton(
-                  icon: Icon(
-                      _controller.value.isPlaying
-                          ? Icons.pause
-                          : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 36),
-                  onPressed: () {
-                    setState(() {
-                      _controller.value.isPlaying
-                          ? _controller.pause()
-                          : _controller.play();
-                    });
-                  },
-                ),
-                IconButton(
-                  icon:
-                      const Icon(Icons.forward_10, color: Colors.white, size: 28),
-                  onPressed: () {
-                    _seek(10);
-                  },
-                ),
-                Text(
-                  '${_printDuration(_controller.value.position)} / ${_printDuration(_controller.value.duration)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    PopupMenuButton<double>(
-                      initialValue: _controller.value.playbackSpeed,
-                      onSelected: _setPlaybackSpeed,
-                      itemBuilder: (context) => [
-                        for (final speed in [0.5, 1.0, 1.5, 2.0])
-                          PopupMenuItem(
-                            value: speed,
-                            child: Text('${speed}x'),
-                          ),
-                      ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0, vertical: 8.0),
-                        child: Text(
-                          '${_controller.value.playbackSpeed}x',
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+  return Container(
+    color: Colors.black54,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1. แถบ Progress Bar (ความคืบหน้า)
+        VideoProgressIndicator(
+          _controller,
+          allowScrubbing: true,
+          colors: const VideoProgressColors(
+              playedColor: Colors.red, bufferedColor: Colors.white54),
+        ),
+        
+        // 2. แถบควบคุมวิดีโอ (ปุ่มต่างๆ)
+        Padding(
+          // 💡 ปรับ Padding: เพิ่มด้านข้างเป็น 16.0 และเพิ่มด้านแนวตั้งเป็น 4.0
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0), 
+          child: Row(
+            // 💡 เปลี่ยนเป็น MainAxisAlignment.start เพื่อให้ปุ่มควบคุมหลักอยู่ชิดซ้าย
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              // ปุ่มย้อนกลับ 10 วิ
+              IconButton(
+                icon: const Icon(Icons.replay_10, color: Colors.white, size: 28),
+                onPressed: () {
+                  _seek(-10);
+                },
+              ),
+              
+              // 💡 เพิ่มช่องว่างคงที่ระหว่างปุ่ม
+              const SizedBox(width: 15.0), 
+              
+              // ปุ่มเล่น/หยุด
+              IconButton(
+                icon: Icon(
+                    _controller.value.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
+                    color: Colors.white,
+                    // 💡 ขนาดใหญ่ขึ้นเล็กน้อยเพื่อให้โดดเด่น
+                    size: 28), 
+                onPressed: () {
+                  setState(() {
+                    _controller.value.isPlaying
+                        ? _controller.pause()
+                        : _controller.play();
+                  });
+                },
+              ),
+              
+              // 💡 เพิ่มช่องว่างคงที่ระหว่างปุ่ม
+              const SizedBox(width: 15.0), 
+              
+              // ปุ่มกรอไปข้างหน้า 10 วิ
+              IconButton(
+                icon: const Icon(Icons.forward_10, color: Colors.white, size: 28),
+                onPressed: () {
+                  _seek(10);
+                },
+              ),
+              
+              // 💡 เพิ่มช่องว่างให้ข้อความบอกเวลาห่างจากปุ่ม
+              const SizedBox(width: 12.0), 
+
+              // ข้อความบอกเวลา
+              Text(
+                '${_printDuration(_controller.value.position)} / ${_printDuration(_controller.value.duration)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+              
+              // Spacer ดันส่วนควบคุมความเร็ว/เต็มจอไปขวา
+              const Spacer(), 
+
+              // ปุ่มควบคุมความเร็ว/เต็มจอ (อยู่ทางขวา)
+              Row(
+                children: [
+                  PopupMenuButton<double>(
+                    initialValue: _controller.value.playbackSpeed,
+                    onSelected: _setPlaybackSpeed,
+                    itemBuilder: (context) => [
+                      for (final speed in [0.5, 1.0, 1.5, 2.0])
+                        PopupMenuItem(
+                          value: speed,
+                          child: Text('${speed}x'),
                         ),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 8.0),
+                      child: Text(
+                        '${_controller.value.playbackSpeed}x',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                          _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                          color: Colors.white),
-                      onPressed: _toggleFullScreen,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                        _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                        color: Colors.white),
+                    onPressed: _toggleFullScreen,
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   String _printDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');

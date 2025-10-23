@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math'; // 💡 ต้อง import dart:math สำหรับ max function
 
 // ----------------------------------------------------------------------
 // 🎯 Global Constant: API Base URL
@@ -47,7 +47,7 @@ class ProfessorUser {
 }
 
 class ProfessorCourse {
-  final String courseId; // ✅ แก้ไข: เปลี่ยนเป็น String
+  final String courseId; 
   final String courseName;
   final String courseImage; 
   final String courseCode;
@@ -61,7 +61,7 @@ class ProfessorCourse {
 
   factory ProfessorCourse.fromJson(Map<String, dynamic> json) {
     return ProfessorCourse(
-      courseId: json['course_id']?.toString() ?? '0', // ✅ แก้ไข: ดึงค่าเป็น String
+      courseId: json['course_id']?.toString() ?? '0', 
       courseName: json['course_name'] as String,
       courseImage: json['image_url'] ?? 'https://placehold.co/300x150/505050/FFFFFF?text=IT+Course',
       courseCode: json['course_code'] as String? ?? 'N/A',
@@ -92,7 +92,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 // ----------------------------------------------------------------------
-// 🔄 Fetch Data Logic (นำกลับมาใช้)
+// 🔄 Fetch Data Logic
 // ----------------------------------------------------------------------
   Future<void> _fetchData() async {
     setState(() {
@@ -137,10 +137,8 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
         _professorCourses = courseData.map((json) => ProfessorCourse.fromJson(json)).toList();
       });
     } else {
-      // หากเกิดข้อผิดพลาดในการดึงข้อมูลหลักสูตร
       setState(() {
         _professorCourses = [];
-        // สามารถเพิ่มการแจ้งเตือน Error ที่นี่ได้ หากต้องการให้แสดง Error เฉพาะส่วน
       });
     }
   }
@@ -167,76 +165,6 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
           : _errorMessage.isNotEmpty
               ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)))
               : _buildProfileContent(context),
-    );
-  }
-
-  // ----------------------------------------------------------------------
-  // 🔨 NAVBAR MOCK (ตามรูป Desktop)
-  // ----------------------------------------------------------------------
-  Widget _buildMockAppBar() {
-    return AppBar(
-      automaticallyImplyLeading: false, 
-      backgroundColor: Colors.white,
-      elevation: 1,
-      titleSpacing: 0,
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          // 1. Logo (IT Icon)
-          Container(
-            width: 200, // กว้างเท่ากับส่วน Sidebar
-            padding: const EdgeInsets.only(left: 10),
-            child: Row(
-              children: [
-                const Icon(Icons.computer, color: Colors.green, size: 28),
-                const SizedBox(width: 5),
-                const Text('IT', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
-              ],
-            ),
-          ),
-          
-          // 2. Search Bar
-          Expanded(
-            child: Container(
-              height: 40,
-              margin: const EdgeInsets.only(left: 20, right: 15),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: Colors.grey[300]!)
-              ),
-              child: const TextField(
-                decoration: InputDecoration(
-                  hintText: 'ค้นหา',
-                  prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.only(top: 0, bottom: 10),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        // 3. Name (อาจารย์ นนทรี สีเขียว)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0),
-          child: Text(
-            _userProfile != null ? 'อาจารย์ ${_userProfile!.firstName} ${_userProfile!.lastName}' : widget.userName,
-            style: const TextStyle(color: Colors.black, fontSize: 16),
-          ),
-        ),
-        // 4. Logout Button/Icon
-        IconButton(
-          icon: const Icon(Icons.power_settings_new, color: Colors.green), 
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Logout')),
-            );
-          },
-        ),
-        const SizedBox(width: 10),
-      ],
     );
   }
 
@@ -271,14 +199,14 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                 children: [
                   Flexible(
                     flex: isWideScreen ? 1 : 0, 
-                    child: _buildPersonalInfoCard(),
+                    child: _buildPersonalInfoCard(), // 🎯 แก้ไข Right Overflow ที่นี่
                   ),
                   
                   SizedBox(width: isWideScreen ? 20 : 0, height: isWideScreen ? 0 : 20),
 
                   Flexible(
                     flex: isWideScreen ? 1 : 0, 
-                    child: _buildProfessorCoursesCard(context),
+                    child: _buildProfessorCoursesCard(context), // 🎯 Responsive Grid (แก้ Right Overflow ที่นี่แล้ว)
                   ),
                 ],
               );
@@ -291,7 +219,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     );
   }
 
-  // Card 1: Personal Information (ข้อมูลส่วนตัว) - ตรงตามรูป
+  // Card 1: Personal Information (ข้อมูลส่วนตัว)
   Widget _buildPersonalInfoCard() {
     final user = _userProfile;
     final displayName = user != null ? '${user.firstName} ${user.lastName}' : widget.userName;
@@ -316,9 +244,14 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
               children: [
                 const Icon(Icons.account_circle, size: 80, color: Colors.blueGrey),
                 const SizedBox(width: 20),
-                Text(
-                  professorNameTitle,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                // 🎯 FIX: ใช้ Expanded เพื่อป้องกันชื่ออาจารย์ที่ยาวเกินไปทำให้เกิด Right Overflow
+                Expanded(
+                  child: Text(
+                    professorNameTitle,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -366,7 +299,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 
-  // Card 2: Professor Courses (หลักสูตรของฉัน) - ตรงตามรูป
+  // Card 2: Professor Courses (หลักสูตรของฉัน) - 💡 Responsive Grid (แก้ Right Overflow แล้ว)
   Widget _buildProfessorCoursesCard(BuildContext context) {
     // แสดงหลักสูตรสูงสุด 4 รายการ
     final List<ProfessorCourse> coursesToShow = _professorCourses.take(4).toList(); 
@@ -415,18 +348,28 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                       child: Text('อาจารย์ยังไม่ได้สร้างหลักสูตรใด ๆ'),
                     ),
                   )
-                : GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: coursesToShow.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, 
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.8, 
-                    ),
-                    itemBuilder: (context, index) {
-                      return _buildCourseCard(coursesToShow[index], context);
+                : LayoutBuilder( // 🎯 FIX: ใช้ LayoutBuilder เพื่อให้ GridView Responsive (ป้องกัน Right Overflow)
+                    builder: (context, constraints) {
+                      // คำนวณจำนวนคอลัมน์: กำหนดความกว้างต่ำสุดของ Card คือ 220px
+                      int crossAxisCount = max(1, (constraints.maxWidth / 220).floor()); 
+                      
+                      // จำกัดจำนวนคอลัมน์สูงสุด
+                      if (crossAxisCount > 3) crossAxisCount = 3; 
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: coursesToShow.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount, // 💡 Dynamic Cross Axis Count
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.8, 
+                        ),
+                        itemBuilder: (context, index) {
+                          return _buildCourseCard(coursesToShow[index], context);
+                        },
+                      );
                     },
                   ),
           ],
@@ -461,7 +404,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ✅ ส่วนที่แก้ไข: Image area (ใช้รูปภาพจริงจาก Network)
+            // ✅ Image area (ใช้รูปภาพจริงจาก Network)
             Expanded(
               flex: 2,
               child: ClipRRect(

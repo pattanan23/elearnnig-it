@@ -30,7 +30,7 @@ class _CourseManagePageState extends State<CourseManagePage> {
   // STATE MANAGEMENT
   // -----------------------------------------------------
   List<dynamic> _courses = [];
-  List<dynamic> _filteredCourses = []; // ข้อมูลที่ใช้แสดงผล (ไม่ต้องใช้กรองแล้ว)
+  List<dynamic> _filteredCourses = []; 
   bool _isLoading = true;
 
   @override
@@ -52,10 +52,11 @@ class _CourseManagePageState extends State<CourseManagePage> {
       final coursesUrl = Uri.parse('$API_BASE_URL/courses-admin');
       final coursesResponse = await http.get(coursesUrl);
 
-      // (ลบการเรียก API teachers ออกไป)
-
       if (coursesResponse.statusCode == 200) {
         final List<dynamic> fetchedCourses = json.decode(coursesResponse.body);
+        
+        // 💡 DEBUG: ตรวจสอบข้อมูลที่ได้รับจาก API เพื่อดูว่ามีคีย์ 'course_name' หรือไม่
+        print('Fetched Courses Data: ${json.encode(fetchedCourses)}'); 
         
         setState(() {
           _courses = fetchedCourses;
@@ -110,7 +111,7 @@ class _CourseManagePageState extends State<CourseManagePage> {
           }
         } catch (e) {
           errorMessage = 'การอัปเดตล้มเหลว: Status Code ${response.statusCode}. ' + 
-                         'โปรดตรวจสอบ Console Server: ${response.body.isNotEmpty ? response.body : 'ไม่มีข้อความตอบกลับ'}';
+                          'โปรดตรวจสอบ Console Server: ${response.body.isNotEmpty ? response.body : 'ไม่มีข้อความตอบกลับ'}';
         }
 
         if (mounted) {
@@ -150,8 +151,6 @@ class _CourseManagePageState extends State<CourseManagePage> {
             _buildHeader(),
             const SizedBox(height: 20),
             
-            // 💡 ลบ _buildSearchAndAction() ออก
-
             // ส่วนตารางข้อมูลและ Loading State (ขยายเต็มพื้นที่)
             Expanded(
               child: _buildBodyContent(),
@@ -188,7 +187,7 @@ class _CourseManagePageState extends State<CourseManagePage> {
     );
   }
 
-  // 💡 ปรับปรุง: ใช้ LayoutBuilder เพื่อให้ตารางขยายเต็มความกว้าง
+  // 🎯 FIX: เปลี่ยนโครงสร้างเพื่อรองรับ Horizontal Scrolling
   Widget _buildBodyContent() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -215,52 +214,47 @@ class _CourseManagePageState extends State<CourseManagePage> {
           ),
         ],
       ),
-      // 💡 LayoutBuilder เพื่อให้ทราบความกว้างของพื้นที่ที่มี
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
+      // 🎯 FIX: ใช้ SingleChildScrollView ในแนวนอนเพื่อรองรับจอเล็ก
+      child: SingleChildScrollView( 
+        scrollDirection: Axis.horizontal, // 👈 KEY: เลื่อนในแนวนอน
+        child: ConstrainedBox(
+          // 🎯 FIX: บังคับให้ตารางมีความกว้างอย่างน้อยเท่ากับพื้นที่หน้าจอทั้งหมด (หัก padding)
+          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40),
+          child: SingleChildScrollView( // เลื่อนในแนวตั้งสำหรับรายการในตาราง
             scrollDirection: Axis.vertical,
-            child: ConstrainedBox(
-              // 💡 บังคับให้ตารางมีความกว้างอย่างน้อยเท่ากับความกว้างสูงสุด
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              // 💡 ลบ Column ที่ครอบ DataTable ออก เพราะไม่ต้องมี Pagination แล้ว
-              child: _buildDataTable(),
-            ),
-          );
-        },
+            child: _buildDataTable(),
+          ),
+        ),
       ),
     );
   }
   
-  // 💡 ปรับปรุง: ใช้ Expanded ใน DataColumn
+  // 🎯 การแสดงผล course_name ในตารางมีความถูกต้องแล้ว
   Widget _buildDataTable() {
     return DataTable(
-      // 💡 ตั้งค่าให้ยืดตาม ConstrainedBox
       columnSpacing: 12.0, 
       dataRowMinHeight: 50, 
       dataRowMaxHeight: 60,
       headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
-      // 💡 ตั้งค่านี้เพื่อบังคับให้ตารางยืดเต็มความกว้าง
-      columns: const [
-        // 💡 ใช้ Expanded เพื่อให้ยืดพื้นที่
-        DataColumn(label: Expanded(child: Text('รหัสวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        DataColumn(label: Expanded(child: Text('ชื่อวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        DataColumn(label: Expanded(child: Text('ผู้สอน/ผู้สร้าง', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        // คอลัมน์แก้ไขข้อมูล ไม่ต้องขยายเต็ม
-        DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
+      columns: [
+        // 🎯 กำหนดความกว้างคงที่ (Fixed Width) แทน Expanded
+        DataColumn(label: Container(width: 100, alignment: Alignment.centerLeft, child: const Text('รหัสวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(label: Container(width: 300, alignment: Alignment.centerLeft, child: const Text('ชื่อวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(label: Container(width: 150, alignment: Alignment.centerLeft, child: const Text('ผู้สอน/ผู้สร้าง', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        // คอลัมน์แก้ไขข้อมูล ไม่ต้องกำหนดความกว้างมาก
+        const DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
       ],
       rows: _filteredCourses.map<DataRow>((course) {
         final instructorName = course['instructor_name'] ?? '-';
-        // ใช้ course['course_name'] เพื่อแสดงชื่อวิชา
-        final courseName = course['course_name'] ?? '-';
+        final courseName = course['course_name'] ?? '-'; // 💡 course_name ถูกเรียกใช้ตรงนี้แล้ว
         
         return DataRow(
           cells: [
-            DataCell(Text(course['course_code'] ?? '-')),
-            DataCell(Text(courseName)), 
-            DataCell(Text(instructorName)),
+            // 🎯 ใช้ SizedBox เพื่อกำหนดความกว้างของ Cell และจัดการ Overflow
+            DataCell(SizedBox(width: 100, child: Text(course['course_code'] ?? '-', overflow: TextOverflow.ellipsis))),
+            DataCell(SizedBox(width: 300, child: Text(courseName, overflow: TextOverflow.ellipsis))), // 💡 แสดงผล course_name
+            DataCell(SizedBox(width: 150, child: Text(instructorName, overflow: TextOverflow.ellipsis))),
             DataCell(
-              // 💡 เปลี่ยนปุ่ม "แก้ไข" เป็น Icon (ตามรูป image_3094f7.png)
               Center( 
                 child: IconButton(
                   icon: const Icon(Icons.edit, color: Colors.redAccent), 
@@ -274,12 +268,8 @@ class _CourseManagePageState extends State<CourseManagePage> {
     );
   }
   
-  // 💡 ลบ _buildPagination() ออก
-
-  // -----------------------------------------------------
-  // FUNCTION: EDIT DIALOG & UTILITY
-  // -----------------------------------------------------
   void _showEditCourseDialog(Map<String, dynamic> course) {
+    final GlobalKey<FormState> _dialogFormKey = GlobalKey<FormState>();
     final courseCodeController = TextEditingController(text: course['course_code'] ?? '');
     
     showDialog(
@@ -288,15 +278,28 @@ class _CourseManagePageState extends State<CourseManagePage> {
         return AlertDialog(
           title: Text('แก้ไขรหัสวิชาของ ID: ${course['course_id']}'),
           content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                // รหัสวิชา (Course Code)
-                TextFormField(
-                  controller: courseCodeController,
-                  decoration: const InputDecoration(labelText: 'รหัสวิชา (Course Code)'),
-                ),
-                const SizedBox(height: 20),
-              ],
+            child: Form( // เพิ่ม Form เพื่อการ Validation
+              key: _dialogFormKey,
+              child: ListBody(
+                children: <Widget>[
+                  // ชื่อวิชา (ไม่ให้แก้ไข) - course_name ถูกเรียกใช้ตรงนี้แล้ว
+                  Text('ชื่อวิชา: ${course['course_name'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold)), 
+                  const SizedBox(height: 10),
+
+                  // รหัสวิชา (Course Code)
+                  TextFormField(
+                    controller: courseCodeController,
+                    decoration: const InputDecoration(labelText: 'รหัสวิชา (Course Code)'),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'กรุณากรอกรหัสวิชา';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
           actions: <Widget>[
@@ -309,15 +312,13 @@ class _CourseManagePageState extends State<CourseManagePage> {
             ElevatedButton(
               child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
               onPressed: () {
-                if (courseCodeController.text.isNotEmpty) {
+                if (_dialogFormKey.currentState!.validate()) {
                   _updateCourse(
                     course['course_id'].toString(),
                     courseCodeController.text, 
                   );
                   Navigator.of(context).pop();
-                } else {
-                  _showErrorDialog('กรุณากรอกรหัสวิชา');
-                }
+                } 
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,

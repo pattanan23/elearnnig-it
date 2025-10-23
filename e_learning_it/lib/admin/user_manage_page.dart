@@ -168,34 +168,38 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
+  // 💡 แก้ไข: ใช้ SingleChildScrollView ในแนวนอนเพื่อให้ Tabs เลื่อนได้บนจอเล็ก
   Widget _buildRoleTabs() {
-    return Row(
-      children: _roleOptions.keys.map((roleKey) {
-        final isSelected = _selectedRole == roleKey;
-        return Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: ElevatedButton(
-            onPressed: () => _filterUsersByRole(roleKey),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isSelected ? const Color(0xFF4CAF50) : Colors.white,
-              foregroundColor: isSelected ? Colors.white : Colors.grey.shade600,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade400,
+    return SingleChildScrollView( 
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _roleOptions.keys.map((roleKey) {
+          final isSelected = _selectedRole == roleKey;
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: ElevatedButton(
+              onPressed: () => _filterUsersByRole(roleKey),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected ? const Color(0xFF4CAF50) : Colors.white,
+                foregroundColor: isSelected ? Colors.white : Colors.grey.shade600,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade400,
+                  ),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Text(roleKey, style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
-            child: Text(roleKey, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
   
-  // 💡 แก้ไข: ใช้ LayoutBuilder และ ConstrainedBox เพื่อให้ตารางขยายเต็มความกว้าง
+  // 💡 แก้ไข: ปรับใช้ SingleChildScrollView (แนวนอน) เพื่อรองรับ DataTable บนจอขนาดเล็ก
   Widget _buildBodyContent() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -221,54 +225,51 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
         ],
       ),
-      // 💡 ใช้ LayoutBuilder เพื่อให้ทราบความกว้างของพื้นที่ที่มี
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
+      // 🎯 FIX: ใช้ SingleChildScrollView ในแนวนอน 
+      // เพื่อให้ผู้ใช้เลื่อนดูตารางได้เมื่อคอลัมน์เกินความกว้างหน้าจอ
+      child: SingleChildScrollView( 
+        scrollDirection: Axis.horizontal, // 💡 สำคัญ: Horizontal scrolling
+        child: ConstrainedBox( // 💡 ConstrainedBox และ LayoutBuilder ถูกนำออกไป
+          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40), // กำหนดความกว้างขั้นต่ำเท่ากับพื้นที่หน้าจอ - padding
+          child: SingleChildScrollView( // 💡 Vertical scrolling สำหรับรายการในตาราง
             scrollDirection: Axis.vertical,
-            // 💡 ใช้ ConstrainedBox เพื่อบังคับให้ตารางมีความกว้างอย่างน้อยเท่ากับความกว้างสูงสุด
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: _buildDataTable(),
-            ),
-          );
-        },
+            child: _buildDataTable(),
+          ),
+        ),
       ),
     );
   }
   
-  // 💡 แก้ไข: ใช้ Expanded ใน DataColumn เพื่อให้คอลัมน์ยืดเต็มพื้นที่
+  // 💡 แก้ไข: ลบ Expanded ใน DataColumn/DataRowCell เพื่อให้ตารางใช้พื้นที่ตามที่กำหนดและรองรับ Horizontal Scroll
   Widget _buildDataTable() {
     return DataTable(
-      // กำหนดความสูงของแถวเพื่อให้ดูสวยงาม
       dataRowMinHeight: 50, 
       dataRowMaxHeight: 60,
       headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
-      // กำหนดระยะห่างระหว่างคอลัมน์ให้น้อยลง (เพราะเรากำลังยืดตาราง)
-      columnSpacing: 12.0, 
+      columnSpacing: 20.0, // ปรับ Column Spacing ให้เหมาะสม
       columns: [
-        // คอลัมน์ที่ต้องการให้ยืด
-        const DataColumn(label: Expanded(child: Text('ชื่อผู้ใช้', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        const DataColumn(label: Expanded(child: Text('อีเมล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        // กำหนดความกว้างขั้นต่ำของคอลัมน์ (เพื่อรองรับจอเล็ก)
+        DataColumn(label: Container(width: 150, alignment: Alignment.centerLeft, child: const Text('ชื่อผู้ใช้', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(label: Container(width: 200, alignment: Alignment.centerLeft, child: const Text('อีเมล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
         
-        // แสดง 'รหัสนิสิต' เมื่อเลือก 'นิสิต' เท่านั้น และให้ยืดพื้นที่
+        // แสดง 'รหัสนิสิต' เมื่อเลือก 'นิสิต' เท่านั้น
         if (_selectedRole == 'นิสิต') 
-          const DataColumn(label: Expanded(child: Text('รหัสนิสิต', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+          DataColumn(label: Container(width: 100, alignment: Alignment.centerLeft, child: const Text('รหัสนิสิต', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
         
-        // คอลัมน์ 'แก้ไขข้อมูล' ไม่ต้องยืดพื้นที่
+        // คอลัมน์ 'แก้ไขข้อมูล'
         const DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
       ],
       rows: _filteredUsers.map<DataRow>((user) {
         final fullName = '${user['first_name']} ${user['last_name']}';
         return DataRow(
           cells: [
-            DataCell(Text(fullName)),
-            DataCell(Text(user['email'])),
+            DataCell(SizedBox(width: 150, child: Text(fullName, overflow: TextOverflow.ellipsis))),
+            DataCell(SizedBox(width: 200, child: Text(user['email'], overflow: TextOverflow.ellipsis))),
             // แสดงรหัสนิสิตในช่องที่ 3 ถ้าเป็นบทบาท 'นิสิต'
             if (_selectedRole == 'นิสิต') 
-              DataCell(Text(user['student_id'] ?? '-')),
+              DataCell(SizedBox(width: 100, child: Text(user['student_id'] ?? '-', overflow: TextOverflow.ellipsis))),
             DataCell(
-              Center( // จัดให้อยู่ตรงกลางเพราะคอลัมน์นี้ไม่ยืดเต็ม
+              Center( 
                 child: IconButton(
                   icon: const Icon(Icons.edit, color: Colors.redAccent), 
                   onPressed: () => _showEditDialog(user),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:e_learning_it/student_outsiders/course/certificate_page.dart';
-// import 'user_model.dart'; // Uncomment this line if user_model.dart is needed for other profile data
+import 'dart:math'; // 💡 ต้องเพิ่ม import สำหรับ max
 
 // ----------------------------------------------------------------------
 // 🎯 CLASS: User (นำ User model มาไว้ที่นี่ชั่วคราว หรือ import เข้ามา)
@@ -43,7 +43,13 @@ class User {
   }
 
   String get title {
-    return role == 'อาจารย์' ? 'อาจารย์' : role;
+    // 💡 แก้ไขการแสดง Title ให้สอดคล้องกับ Role (นิสิต/อาจารย์)
+    if (role == 'อาจารย์') {
+      return 'อาจารย์';
+    } else if (role == 'นิสิต') {
+      return 'นิสิต';
+    }
+    return role; // สำหรับ Role อื่นๆ
   }
 }
 
@@ -97,7 +103,7 @@ class _ProfilePageState extends State<ProfilePage> {
   User? _userProfile; // 🎯 เพิ่ม State สำหรับเก็บข้อมูลโปรไฟล์
   
   // ---------------------------------------------------
-  // 🎯 ฟังก์ชันดึงข้อมูลโปรไฟล์ผู้ใช้ (ใหม่)
+  // 🎯 ฟังก์ชันดึงข้อมูลโปรไฟล์ผู้ใช้
   // ---------------------------------------------------
   Future<void> _fetchUserProfile() async {
     const String baseApiUrl = 'http://localhost:3006';
@@ -170,20 +176,19 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // ---------------------------------------------------
-  // 🎯 [MODIFIED WIDGET] Card สำหรับแสดงวุฒิบัตร
+  // 🎯 Card สำหรับแสดงวุฒิบัตร
   // ---------------------------------------------------
   Widget _buildCertificateCard(UserCertificate certificate, BuildContext context) {
     const Color actionIconColor = Color(0xFF03A96B);
     const Color courseCodeColor = Color(0xFF1976D2);
     const Color darkGraphicColor = Color(0xFF293241);
     
-    // 💡 ครอบด้วย SizedBox เพื่อกำหนด Fixed Height
-    const double fixedCardHeight = 250.0; // 🎯 กำหนดความสูงที่ต้องการ
+    const double fixedCardHeight = 220.0; 
 
     return InkWell(
       onTap: () => _navigateToCertificatePage(context, certificate),
       borderRadius: BorderRadius.circular(8),
-      child: SizedBox( // 🎯 1. ใช้ SizedBox เพื่อกำหนด Fixed Height
+      child: SizedBox( 
         height: fixedCardHeight,
         child: Card(
           elevation: 4,
@@ -209,25 +214,25 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ),
               ),
-              Expanded( // 💡 2. ใช้ Expanded ครอบเนื้อหาส่วนกลางแทน Spacer
+              Expanded( 
                 child: Padding(
-                  padding: const EdgeInsets.all(10.0),
+                  padding: const EdgeInsets.all(8.0), 
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'รหัสวิชา : ${certificate.courseCode}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10, 
                           fontWeight: FontWeight.bold,
                           color: courseCodeColor,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2), 
                       Text(
                         'วิชา : ${certificate.subjectName}',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11, 
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
@@ -237,7 +242,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       const SizedBox(height: 2),
                       Text(
                         'หลักสูตร: ${certificate.courseName}',
-                        style: const TextStyle(fontSize: 10, color: Colors.black54),
+                        style: const TextStyle(fontSize: 9, color: Colors.black54), 
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -245,9 +250,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ),
-              // 💡 3. นำ const Spacer() ออก
               Padding(
-                padding: const EdgeInsets.only(left: 10.0, bottom: 10.0),
+                padding: const EdgeInsets.only(left: 8.0, bottom: 8.0), 
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -256,20 +260,20 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         const Text(
                           'วันที่ออก:',
-                          style: TextStyle(fontSize: 9, color: Colors.grey),
+                          style: TextStyle(fontSize: 8, color: Colors.grey), 
                         ),
                         Text(
                           certificate.issueDate,
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.black87),
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.black87), 
                         ),
                       ],
                     ),
                     const Padding(
-                      padding: EdgeInsets.only(right: 10),
+                      padding: EdgeInsets.only(right: 8), 
                       child: Icon(
                         Icons.arrow_forward_ios,
                         color: actionIconColor,
-                        size: 14,
+                        size: 12, 
                       ),
                     ),
                   ],
@@ -299,86 +303,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // ---------------------------------------------------
-  // 💡 [REDESIGNED BUILD]
-  // ---------------------------------------------------
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF03A96B);
-    
-    if (_isLoading) {
-      return const Scaffold(
-        appBar: null,
-        body: Center(child: CircularProgressIndicator(color: primaryColor)),
-      );
-    }
-    
-    if (_userProfile == null && _errorMessage.isNotEmpty) {
-        return Scaffold(
-        appBar: AppBar(title: const Text('My Profile'), backgroundColor: primaryColor, foregroundColor: Colors.white),
-        body: Center(child: Text('ไม่สามารถโหลดข้อมูลผู้ใช้ได้: $_errorMessage', style: const TextStyle(color: Colors.red))),
-      );
-    }
-
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Profile'),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        automaticallyImplyLeading: true,
-      ),
-
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final bool isLargeScreen = constraints.maxWidth > 800;
-          
-          final Widget content = isLargeScreen
-            ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20, top: 20, right: 10),
-                    child: _buildPersonalInfoSection(primaryColor),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 10, top: 20, right: 20, bottom: 20), // เพิ่ม bottom padding
-                    child: _buildCertificatesSection(primaryColor, 2, 20),
-                  ),
-                ),
-              ],
-            )
-            : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                  child: _buildPersonalInfoSection(primaryColor),
-                ),
-                const SizedBox(height: 20),
-                Expanded( // ใช้ Expanded เพื่อให้ GridView ยืดเต็มพื้นที่ที่เหลือใน Column
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: SingleChildScrollView( // 🎯 เพิ่ม SingleChildScrollView เพื่อแก้ปัญหา Overflow
-                      child: _buildCertificatesSection(primaryColor, 2, 16),
-                    ),
-                  ),
-                ),
-              ],
-            );
-
-          return SingleChildScrollView(child: content); // 🎯 ปรับให้ SingleChildScrollView อยู่ภายนอกสุดสำหรับจอเล็ก
-        },
-      ),
-    );
-  }
-  
-  // ---------------------------------------------------
-  // 🎯 [MODIFIED WIDGET] ส่วนแสดงข้อมูลส่วนตัว (กำหนด Max Width)
+  // 🎯 ส่วนแสดงข้อมูลส่วนตัว
   // ---------------------------------------------------
   Widget _buildPersonalInfoSection(Color primaryColor) {
     final User displayUser = _userProfile ?? User(
@@ -392,17 +317,15 @@ class _ProfilePageState extends State<ProfilePage> {
     
     final String displayFullName = displayUser.fullName.trim().isEmpty ? widget.userName : displayUser.fullName;
 
-    // 💡 ใช้ ConstrainedBox เพื่อกำหนดความกว้างสูงสุด (Max Width)
     return ConstrainedBox(
       constraints: const BoxConstraints(
-        maxWidth: 400.0, // 🎯 กำหนดความกว้างสูงสุดของ Card (Fixed Width Limit)
+        maxWidth: 400.0, 
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // 🎯 Icon และ Title ตรงกับรูป
               Icon(Icons.person_pin, size: 28, color: primaryColor),
               const SizedBox(width: 8),
               Text(
@@ -423,7 +346,6 @@ class _ProfilePageState extends State<ProfilePage> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                // 💡 ความสูงจะยืดตามเนื้อหา (Intrinsically-sized height)
                 children: [
                   // ชื่อผู้ใช้และ Avatar
                   Row(
@@ -434,9 +356,17 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Icon(Icons.person, color: Colors.white, size: 35),
                       ),
                       const SizedBox(width: 15),
-                      Text(
-                        '${displayUser.title} ${displayFullName}', // 🎯 แสดง Title ตามรูป
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black87),
+                      Expanded(
+                        child: Text(
+                          '${displayUser.title} ${displayFullName}', 
+                          style: const TextStyle(
+                            fontSize: 18, 
+                            fontWeight: FontWeight.w600, 
+                            color: Colors.black87
+                          ),
+                          maxLines: 1, 
+                          overflow: TextOverflow.ellipsis, 
+                        ),
                       ),
                     ],
                   ),
@@ -444,9 +374,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   
                   // รายละเอียด
                   const SizedBox(height: 10),
-                  Text('รหัสผู้ใช้ : ${displayUser.userId}', style: const TextStyle(fontSize: 14)), // 🎯 เปลี่ยนเป็น รหัสผู้ใช้
+                  Text('รหัสผู้ใช้ : ${displayUser.userId}', style: const TextStyle(fontSize: 13)), 
                   const SizedBox(height: 10),
-                  Text('อีเมล : ${displayUser.email}', style: const TextStyle(fontSize: 14)),
+                  Text('อีเมล : ${displayUser.email}', style: const TextStyle(fontSize: 13)), 
                   
                 ],
               ),
@@ -458,22 +388,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // ---------------------------------------------------
-  // 🎯 [MODIFIED WIDGET] ส่วนแสดงรายการวุฒิบัตร (ปรับ childAspectRatio)
+  // 🎯 [MODIFIED WIDGET] ส่วนแสดงรายการวุฒิบัตร (ปรับ Responsive Grid)
   // ---------------------------------------------------
-  Widget _buildCertificatesSection(Color primaryColor, int crossAxisCount, double spacing) {
+  Widget _buildCertificatesSection(Color primaryColor) {
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween, // 🎯 เพิ่มเพื่อวาง Edit Icon
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
-                Icon(Icons.laptop_chromebook, size: 28, color: primaryColor), // 🎯 Icon ใกล้เคียงกับรูป
+                Icon(Icons.laptop_chromebook, size: 28, color: primaryColor),
                 const SizedBox(width: 8),
                 Text(
-                  'ใบประกาศของฉัน (${_userCertificates.length})', // 🎯 ยังคงเป็น ใบประกาศ ตามโค้ดเดิม
+                  'ใบประกาศของฉัน (${_userCertificates.length})',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
@@ -511,24 +441,112 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Text('ยังไม่มีวุฒิบัตรที่ได้รับในขณะนี้'),
           ))
         else
-          // 🎯 GridView.builder
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            
-            itemCount: _userCertificates.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: spacing,
-              mainAxisSpacing: spacing,
-              childAspectRatio: 1.8, // 🎯 ปรับให้ Card เป็นแนวตั้งเหมือน Card ในรูปภาพอาจารย์
-            ),
-            itemBuilder: (context, index) {
-              final certificate = _userCertificates[index];
-              return _buildCertificateCard(certificate, context);
-            },
+          // 🎯 ใช้ LayoutBuilder เพื่อให้ GridView ปรับจำนวนคอลัมน์ตามความกว้าง
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // คำนวณจำนวนคอลัมน์: กำหนดความกว้างต่ำสุดของ Card คือ 220px
+              int crossAxisCount = max(1, (constraints.maxWidth / 220).floor()); 
+              
+              // จำกัดจำนวนคอลัมน์สูงสุดไม่ให้เยอะเกินไปบนจอใหญ่มาก ๆ
+              if (crossAxisCount > 4) crossAxisCount = 4;
+              
+              const double spacing = 16.0;
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(), 
+                
+                itemCount: _userCertificates.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount, // 💡 Dynamic Cross Axis Count
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                  childAspectRatio: 0.85, 
+                ),
+                itemBuilder: (context, index) {
+                  final certificate = _userCertificates[index];
+                  return _buildCertificateCard(certificate, context);
+                },
+              );
+            }
           ),
       ],
+    );
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF03A96B);
+    
+    if (_isLoading) {
+      return const Scaffold(
+        appBar: null,
+        body: Center(child: CircularProgressIndicator(color: primaryColor)),
+      );
+    }
+    
+    if (_userProfile == null && _errorMessage.isNotEmpty) {
+        return Scaffold(
+        appBar: AppBar(title: const Text('My Profile'), backgroundColor: primaryColor, foregroundColor: Colors.white),
+        body: Center(child: Text('ไม่สามารถโหลดข้อมูลผู้ใช้ได้: $_errorMessage', style: const TextStyle(color: Colors.red))),
+      );
+    }
+
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Profile'),
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: true,
+      ),
+
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isLargeScreen = constraints.maxWidth > 800;
+          
+          final Widget content = isLargeScreen
+            ? Row( // 🎯 Large Screen: Horizontal Layout (1:2 ratio)
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 20, top: 20, right: 10),
+                    child: _buildPersonalInfoSection(primaryColor),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10, top: 20, right: 20, bottom: 20),
+                    child: _buildCertificatesSection(primaryColor), // 💡 ใช้ Responsive Section
+                  ),
+                ),
+              ],
+            )
+            : Column( // 🎯 Small Screen: Vertical Layout
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. ส่วนข้อมูลส่วนตัว (อยู่บน)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                  child: _buildPersonalInfoSection(primaryColor),
+                ),
+                const SizedBox(height: 20),
+                // 2. ส่วนใบประกาศ (อยู่ล่าง)
+                Padding( 
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: _buildCertificatesSection(primaryColor), // 💡 ใช้ Responsive Section
+                ),
+                const SizedBox(height: 20),
+              ],
+            );
+
+          return SingleChildScrollView(child: content); 
+        },
+      ),
     );
   }
 }
