@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:math';
+import 'package:e_learning_it/student_outsiders/footer_widget.dart';
 
 // ลบคลาส Course ออกจากไฟล์นี้
 
@@ -127,6 +128,8 @@ class MainPage extends StatelessWidget {
                   );
                 },
               ),
+              const SizedBox(height: 40),
+               const FooterWidget(),
             ],
           ),
         ),
@@ -212,6 +215,8 @@ class MainPage extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            
           ],
         ),
       ),

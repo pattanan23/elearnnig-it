@@ -21,7 +21,7 @@ ffmpeg.setFfprobePath('C:/ffmpeg/bin/ffprobe.exe');
 
 const app = express();
 const port = process.env.PORT || 3006;
-const UPLOAD_DIR = 'C:\\Users\\atSine\\Desktop\\ปัญหาพิเศษ\\Web\\data';
+const UPLOAD_DIR = 'C:\\Users\\atSine\\Desktop\\Problem\\Web\\data';
 
 // Middleware
 app.use(cors());

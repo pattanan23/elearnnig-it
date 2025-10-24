@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:e_learning_it/login_page.dart';
 // 1. Import the new ProfilePage
-import 'package:e_learning_it/professor/professor_profile_page.dart';
+import 'package:e_learning_it/admin/profile_admin.dart';
 
 class NavbarAdminPage extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
@@ -25,7 +25,7 @@ class NavbarAdminPage extends StatelessWidget implements PreferredSizeWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ProfessorProfilePage(
+                  builder: (context) => AdminProfilePage(
                     userName: userName,
                     userId: userId,
                   ),

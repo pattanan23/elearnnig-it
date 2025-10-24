@@ -1,5 +1,6 @@
 import 'package:e_learning_it/student_outsiders/drawer_page.dart';
 import 'package:e_learning_it/student_outsiders/navbar_normal.dart';
+import 'package:e_learning_it/student_outsiders/footer_widget.dart';
 import 'package:flutter/material.dart';
 
 class AboutUsPage extends StatelessWidget {
@@ -81,10 +82,13 @@ class AboutUsPage extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 40),
+               const FooterWidget(), 
             ],
           ),
         ),
       ),
+
     );
   }
 

@@ -12,7 +12,7 @@ const String BASE_URL = 'http://localhost:3006';
 // ----------------------------------------------------------------------
 // 🎯 Minimal User and Course Models 
 // ----------------------------------------------------------------------
-class ProfessorUser {
+class AdminUser {
   final int userId;
   final String firstName;
   final String lastName;
@@ -20,7 +20,7 @@ class ProfessorUser {
   final String role;
   final String? studentId; 
 
-  ProfessorUser({
+  AdminUser({
     required this.userId,
     required this.firstName,
     required this.lastName,
@@ -29,11 +29,11 @@ class ProfessorUser {
     this.studentId,
   });
 
-  factory ProfessorUser.fromJson(Map<String, dynamic> json) {
+  factory AdminUser.fromJson(Map<String, dynamic> json) {
     final userIdValue = json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id'].toString()) ?? 0;
     final studentIdValue = json['student_id'];
 
-    return ProfessorUser(
+    return AdminUser(
       userId: userIdValue,
       firstName: json['first_name'] as String,
       lastName: json['last_name'] as String, 
@@ -46,22 +46,22 @@ class ProfessorUser {
   }
 }
 
-class ProfessorCourse {
+class AdminCourse {
   final String courseId; 
   final String courseName;
   final String courseImage; 
   final String courseCode;
 
-  ProfessorCourse({
+  AdminCourse({
     required this.courseId,
     required this.courseName,
     required this.courseImage,
     required this.courseCode,
   });
 
-  factory ProfessorCourse.fromJson(Map<String, dynamic> json) {
-    return ProfessorCourse(
-      courseId: json['course_id']?.toString() ?? '0', 
+  factory AdminCourse.fromJson(Map<String, dynamic> json) {
+    return AdminCourse(
+      courseId: json['course_id']?.toString() ?? '0',
       courseName: json['course_name'] as String,
       courseImage: json['image_url'] ?? 'https://placehold.co/300x150/505050/FFFFFF?text=IT+Course',
       courseCode: json['course_code'] as String? ?? 'N/A',
@@ -69,19 +69,19 @@ class ProfessorCourse {
   }
 }
 
-class ProfessorProfilePage extends StatefulWidget {
-  final String userName; 
+class AdminProfilePage extends StatefulWidget {
+  final String userName;
   final String userId;
 
-  const ProfessorProfilePage({super.key, required this.userName, required this.userId});
+  const AdminProfilePage({super.key, required this.userName, required this.userId});
 
   @override
-  State<ProfessorProfilePage> createState() => _ProfessorProfilePageState();
+  State<AdminProfilePage> createState() => _AdminProfilePageState();
 }
 
-class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
-  ProfessorUser? _userProfile;
-  List<ProfessorCourse> _professorCourses = [];
+class _AdminProfilePageState extends State<AdminProfilePage> {
+  AdminUser? _userProfile;
+  List<AdminCourse> _adminCourses = [];
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -120,7 +120,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      _userProfile = ProfessorUser.fromJson(data);
+      _userProfile = AdminUser.fromJson(data);
     } else {
       throw Exception('ไม่สามารถดึงข้อมูลโปรไฟล์ได้ (Status: ${response.statusCode})');
     }
@@ -134,11 +134,11 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     if (response.statusCode == 200) {
       final List<dynamic> courseData = json.decode(response.body);
       setState(() {
-        _professorCourses = courseData.map((json) => ProfessorCourse.fromJson(json)).toList();
+        _adminCourses = courseData.map((json) => AdminCourse.fromJson(json)).toList();
       });
     } else {
       setState(() {
-        _professorCourses = [];
+        _adminCourses = [];
       });
     }
   }
@@ -203,11 +203,6 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                   ),
                   
                   SizedBox(width: isWideScreen ? 20 : 0, height: isWideScreen ? 0 : 20),
-
-                  Flexible(
-                    flex: isWideScreen ? 1 : 0, 
-                    child: _buildProfessorCoursesCard(context), // 🎯 Responsive Grid (แก้ Right Overflow ที่นี่แล้ว)
-                  ),
                 ],
               );
             },
@@ -226,7 +221,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     final displayId = user != null ? user.userId.toString() : widget.userId; 
     final displayEmail = user?.email ?? 'noname@email.com';
     
-    final professorNameTitle = 'อาจารย์ ${displayName}'; 
+    final professorNameTitle = '${displayName}'; 
 
     return Card(
       elevation: 0, 
@@ -299,87 +294,8 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 
-  // Card 2: Professor Courses (หลักสูตรของฉัน) - 💡 Responsive Grid (แก้ Right Overflow แล้ว)
-  Widget _buildProfessorCoursesCard(BuildContext context) {
-    // แสดงหลักสูตรสูงสุด 4 รายการ
-    final List<ProfessorCourse> coursesToShow = _professorCourses.take(4).toList(); 
-
-    return Card(
-      elevation: 0, 
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey[300]!, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.menu_book, size: 20, color: Colors.green),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'หลักสูตรของฉัน', 
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18, color: Colors.black54),
-                  onPressed: () {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('แก้ไขหลักสูตร')),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Course Grid
-            coursesToShow.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40.0),
-                      child: Text('อาจารย์ยังไม่ได้สร้างหลักสูตรใด ๆ'),
-                    ),
-                  )
-                : LayoutBuilder( // 🎯 FIX: ใช้ LayoutBuilder เพื่อให้ GridView Responsive (ป้องกัน Right Overflow)
-                    builder: (context, constraints) {
-                      // คำนวณจำนวนคอลัมน์: กำหนดความกว้างต่ำสุดของ Card คือ 220px
-                      int crossAxisCount = max(1, (constraints.maxWidth / 220).floor()); 
-                      
-                      // จำกัดจำนวนคอลัมน์สูงสุด
-                      if (crossAxisCount > 3) crossAxisCount = 3; 
-
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: coursesToShow.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount, // 💡 Dynamic Cross Axis Count
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 0.8, 
-                        ),
-                        itemBuilder: (context, index) {
-                          return _buildCourseCard(coursesToShow[index], context);
-                        },
-                      );
-                    },
-                  ),
-          ],
-        ),
-      ),
-    );
-  }
-  
   // 🔨 Course Card Widget (ใช้ Card เดียวกับในรูป)
-  Widget _buildCourseCard(ProfessorCourse course, BuildContext context) {
+  Widget _buildCourseCard(AdminCourse course, BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,

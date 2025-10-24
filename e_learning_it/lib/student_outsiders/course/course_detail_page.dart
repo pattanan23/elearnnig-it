@@ -436,7 +436,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with SingleTickerPr
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.course.courseName),
-        backgroundColor: const Color(0xFF2E7D32),
+        backgroundColor: const Color(0xFF03A96B),
       ),
       body: Stack(
         children: [

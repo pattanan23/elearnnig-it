@@ -3,6 +3,7 @@ import 'package:e_learning_it/student_outsiders/navbar_normal.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:e_learning_it/student_outsiders/footer_widget.dart';
 
 class ReportPage extends StatefulWidget {
   final String userName;
@@ -295,9 +296,12 @@ class _ReportPageState extends State<ReportPage> {
                     ),
                   ],
                 ),
-              ],
+                const SizedBox(height: 40),
+                 const FooterWidget(),
+              ],               
             ),
           ),
+         
         ),
       ),
     );

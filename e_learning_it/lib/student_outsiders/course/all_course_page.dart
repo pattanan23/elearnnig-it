@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:math';
+import 'package:e_learning_it/student_outsiders/footer_widget.dart';
 
 
 const String _baseUrl = 'http://localhost:3006/api';
@@ -166,6 +167,7 @@ class CourseAllPage extends StatelessWidget {
                 ],
               ),
             ),
+           
           ],
         ),
       ),
@@ -255,17 +257,8 @@ class CourseAllPage extends StatelessWidget {
                 userName: userName,
                 userId: userId,
               ),
-              // สามารถเพิ่มส่วนหลักสูตรแนะนำได้โดยลบคอมเมนต์ออก
-              /*
-              const SizedBox(height: 40),
-              _buildCourseSection(
-                context,
-                title: 'หลักสูตรแนะนำ',
-                futureCourses: fetchRecommendedCourses(),
-                userName: userName,
-                userId: userId,
-              ),
-              */
+               const SizedBox(height: 40),
+             const FooterWidget(),
             ],
           ),
         ),

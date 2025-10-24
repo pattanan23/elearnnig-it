@@ -25,7 +25,8 @@ class Lesson {
     if (rawId is int) {
       parsedId = rawId;
     } else if (rawId is String) {
-      parsedId = int.tryParse(rawId) ?? 0; // แปลง String เป็น int หรือให้ค่าเริ่มต้นเป็น 0
+      parsedId = int.tryParse(rawId) ??
+          0; // แปลง String เป็น int หรือให้ค่าเริ่มต้นเป็น 0
     } else {
       parsedId = 0; // ถ้าไม่ใช่ทั้ง int และ String ให้ค่าเริ่มต้นเป็น 0
     }
@@ -102,8 +103,11 @@ class CourseDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ตัวอย่างการใช้ Navbar (ต้อง import และสร้าง Navbar ขึ้นมาก่อน)
-      // appBar: NavbarNormal(userName: userName, userId: userId), 
+      appBar: AppBar(
+         title: const Text('รายละเอียดหลักสูตร', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF03A96B),
+        iconTheme: const IconThemeData(color: Colors.white), 
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,9 +164,13 @@ class CourseDetailPage extends StatelessWidget {
             labelColor: Color(0xFF2E7D32),
             unselectedLabelColor: Colors.black54,
             tabs: [
-              Tab(child: Text('รายละเอียดหลักสูตร', overflow: TextOverflow.ellipsis)),
+              Tab(
+                  child: Text('รายละเอียดหลักสูตร',
+                      overflow: TextOverflow.ellipsis)),
               Tab(child: Text('วิดีโอ', overflow: TextOverflow.ellipsis)),
-              Tab(child: Text('เอกสารประกอบการเรียน', overflow: TextOverflow.ellipsis)),
+              Tab(
+                  child: Text('เอกสารประกอบการเรียน',
+                      overflow: TextOverflow.ellipsis)),
               Tab(child: Text('ผู้สอน', overflow: TextOverflow.ellipsis)),
             ],
           ),
@@ -178,7 +186,7 @@ class CourseDetailPage extends StatelessWidget {
 
                 // Tab 3: เอกสารประกอบการเรียน (ใช้ lessons แทน fileNames)
                 _buildFileListView(context),
-                
+
                 // Tab 4: ผู้สอน
                 _buildTabContent('ผู้สอน', course.professorName),
               ],
@@ -250,9 +258,10 @@ class CourseDetailPage extends StatelessWidget {
 
   Widget _buildVideoLessonsTab(BuildContext context) {
     if (course.lessons.isEmpty) {
-      return const Center(child: Text('ไม่พบวิดีโอการเรียนการสอนสำหรับหลักสูตรนี้'));
+      return const Center(
+          child: Text('ไม่พบวิดีโอการเรียนการสอนสำหรับหลักสูตรนี้'));
     }
-    
+
     return ListView.builder(
       padding: const EdgeInsets.all(16.0),
       itemCount: course.lessons.length,
@@ -262,9 +271,10 @@ class CourseDetailPage extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 8),
           elevation: 2,
           child: ListTile(
-            leading: const Icon(Icons.play_circle_filled, color: Colors.blue, size: 30),
+            leading: const Icon(Icons.play_circle_filled,
+                color: Colors.blue, size: 30),
             title: Text('วิดีโอตอนที่ ${index + 1}: ${lesson.videoName}',
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(lesson.videoDescription),
             onTap: () async {
               if (lesson.videoUrl != null) {
@@ -277,9 +287,9 @@ class CourseDetailPage extends StatelessWidget {
                   );
                 }
               } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ไม่พบลิงก์วิดีโอ')),
-                  );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('ไม่พบลิงก์วิดีโอ')),
+                );
               }
             },
           ),
@@ -290,10 +300,12 @@ class CourseDetailPage extends StatelessWidget {
 
   Widget _buildFileListView(BuildContext context) {
     // กรองเฉพาะ lesson ที่มีไฟล์ PDF
-    final filesWithPdf = course.lessons.where((lesson) => lesson.pdfUrl != null).toList();
+    final filesWithPdf =
+        course.lessons.where((lesson) => lesson.pdfUrl != null).toList();
 
     if (filesWithPdf.isEmpty) {
-      return const Center(child: Text('ไม่พบเอกสารประกอบการเรียนสำหรับหลักสูตรนี้'));
+      return const Center(
+          child: Text('ไม่พบเอกสารประกอบการเรียนสำหรับหลักสูตรนี้'));
     }
 
     return ListView.builder(

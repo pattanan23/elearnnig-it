@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:math';
+import 'package:e_learning_it/student_outsiders/footer_widget.dart';
 
 class CourseNewPage extends StatelessWidget {
   final String userName;
@@ -159,6 +160,7 @@ class CourseNewPage extends StatelessWidget {
                 ],
               ),
             ),
+           
           ],
         ),
       ),
@@ -244,6 +246,8 @@ class CourseNewPage extends StatelessWidget {
                 userName: userName,
                 userId: userId,
               ),
+               const SizedBox(height: 40),
+            const FooterWidget(),
             ],
           ),
         ),

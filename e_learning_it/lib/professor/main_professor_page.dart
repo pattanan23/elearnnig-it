@@ -130,7 +130,6 @@ class MainProfessorPage extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         try {
-          // ใช้ courseId โดยตรงแทนการแปลง
           final response = await http.get(Uri.parse('http://localhost:3006/api/course/${course.courseId}'));
           
           if (response.statusCode == 200) {
