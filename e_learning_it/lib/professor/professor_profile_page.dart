@@ -1,8 +1,7 @@
-// professor_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:math'; // 💡 ต้อง import dart:math สำหรับ max function
+import 'dart:math';
 
 // ----------------------------------------------------------------------
 // 🎯 Global Constant: API Base URL
@@ -69,6 +68,41 @@ class ProfessorCourse {
   }
 }
 
+// ----------------------------------------------------------------------
+// 🎯 FULL Course Model (ใหม่! สำหรับใช้ใน Dialog แก้ไข) 
+// ----------------------------------------------------------------------
+class FullCourseDetails {
+  final String courseId; 
+  final String courseCode;
+  final String courseName;
+  final String shortDescription;
+  final String description;
+  final String objective;
+  final String imageUrl;
+
+  FullCourseDetails({
+    required this.courseId,
+    required this.courseCode,
+    required this.courseName,
+    required this.shortDescription,
+    required this.description,
+    required this.objective,
+    required this.imageUrl,
+  });
+
+  factory FullCourseDetails.fromJson(Map<String, dynamic> json) {
+    return FullCourseDetails(
+      courseId: json['course_id']?.toString() ?? '0',
+      courseCode: json['course_code'] as String? ?? 'N/A',
+      courseName: json['course_name'] as String? ?? 'ไม่ระบุชื่อวิชา',
+      shortDescription: json['short_description'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      objective: json['objective'] as String? ?? '',
+      imageUrl: json['image_url'] ?? 'https://placehold.co/300x150/505050/FFFFFF?text=IT+Course',
+    );
+  }
+}
+
 class ProfessorProfilePage extends StatefulWidget {
   final String userName; 
   final String userId;
@@ -92,7 +126,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 // ----------------------------------------------------------------------
-// 🔄 Fetch Data Logic
+// 🔄 Fetch Data Logic & API Interaction
 // ----------------------------------------------------------------------
   Future<void> _fetchData() async {
     setState(() {
@@ -127,7 +161,6 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
   Future<void> _fetchProfessorCourses() async {
-    // เรียก API ที่กรองตาม userId เพื่อดึงเฉพาะหลักสูตรที่ผู้ใช้นี้สร้าง
     final url = Uri.parse('$BASE_URL/api/professor/courses/${widget.userId}');
     final response = await http.get(url);
 
@@ -142,7 +175,185 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       });
     }
   }
+  
+  // ⚙️ API NEW: ดึงรายละเอียดหลักสูตรแบบเต็ม (เพื่อนำมากรอกใน Pop-up ก่อนแก้ไข)
+  Future<FullCourseDetails> _fetchCourseDetails(String courseId) async {
+    final url = Uri.parse('$BASE_URL/api/courses/$courseId'); // สมมติว่ามี API นี้อยู่
+    final response = await http.get(url);
 
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      // API อาจจะส่งข้อมูลเป็น Array ถ้าเป็นเช่นนั้นต้องแก้ตรงนี้
+      // สำหรับโค้ดนี้ สมมติว่าส่งเป็น Object { ... }
+      return FullCourseDetails.fromJson(data);
+    } else {
+      throw Exception('ไม่สามารถดึงรายละเอียดหลักสูตรได้ (Status: ${response.statusCode})');
+    }
+  }
+  
+  // ⚙️ API NEW: อัปเดตข้อมูลหลักสูตรผ่าน API
+  Future<void> _updateCourseDetails(FullCourseDetails course) async {
+    final url = Uri.parse('$BASE_URL/api/courses/${course.courseId}'); 
+    final response = await http.put(
+      url,
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        // ฟิลด์ต้องตรงกับ SQL Update Query: course_code, course_name, short_description, description, objective
+        'course_code': course.courseCode,
+        'course_name': course.courseName,
+        'short_description': course.shortDescription,
+        'description': course.description,
+        'objective': course.objective,
+        // course_id ถูกใช้เป็น $6 ใน WHERE clause ใน SQL Query (ส่งใน URL แล้ว)
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('ไม่สามารถอัปเดตหลักสูตรได้ (Status: ${response.statusCode}, Error: ${response.body})');
+    }
+    
+    // เมื่ออัปเดตสำเร็จ ให้โหลดข้อมูลทั้งหมดใหม่ เพื่อให้รายการหลักสูตรอัปเดตบนหน้าจอ
+    await _fetchData(); 
+  }
+
+
+// ----------------------------------------------------------------------
+// 📝 Edit Dialog Widget (ใหม่! สำหรับการแก้ไข)
+// ----------------------------------------------------------------------
+  void _showEditCourseDialog(ProfessorCourse course) async {
+    // แสดง CircularProgressIndicator ขณะโหลดรายละเอียดเต็ม
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 1. ดึงรายละเอียดฉบับเต็มมากรอกในฟอร์ม
+      final details = await _fetchCourseDetails(course.courseId);
+      
+      // ปิด Loading Dialog
+      Navigator.of(context).pop(); 
+
+      // สร้าง TextEditingController และกำหนดค่าเริ่มต้น
+      final codeController = TextEditingController(text: details.courseCode);
+      final nameController = TextEditingController(text: details.courseName);
+      final shortDescController = TextEditingController(text: details.shortDescription);
+      final descController = TextEditingController(text: details.description);
+      final objectiveController = TextEditingController(text: details.objective);
+      final formKey = GlobalKey<FormState>();
+
+      // 2. แสดง Dialog แก้ไข
+      await showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: Text('แก้ไขหลักสูตร: ${course.courseCode}'),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTextField(codeController, 'รหัสวิชา (course_code)', isRequired: true),
+                    _buildTextField(nameController, 'ชื่อวิชา (course_name)', isRequired: true),
+                    _buildTextField(shortDescController, 'คำอธิบายสั้น ๆ (short_description)', maxLines: 2),
+                    _buildTextField(descController, 'รายละเอียดหลักสูตร (description)', maxLines: 3),
+                    _buildTextField(objectiveController, 'วัตถุประสงค์ (objective)', maxLines: 3),
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('ยกเลิก'),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                },
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF03A96B)),
+                child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    // 3. สร้าง Object สำหรับส่ง API
+                    final updatedCourse = FullCourseDetails(
+                      courseId: course.courseId,
+                      courseCode: codeController.text,
+                      courseName: nameController.text,
+                      shortDescription: shortDescController.text,
+                      description: descController.text,
+                      objective: objectiveController.text,
+                      imageUrl: details.imageUrl, // ใช้รูปภาพเดิม
+                    );
+
+                    // 4. เรียกฟังก์ชันอัปเดต
+                    try {
+                      Navigator.of(dialogContext).pop(); // ปิด Dialog ก่อนส่งข้อมูล
+                      // แสดง Loading indicator อีกครั้ง (Optional)
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+                      
+                      await _updateCourseDetails(updatedCourse);
+                      
+                      // ปิด Loading indicator
+                      Navigator.of(context).pop(); 
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('อัปเดตหลักสูตรสำเร็จ!')),
+                      );
+                    } catch (e) {
+                      // ปิด Loading indicator หากมี
+                      if (Navigator.of(context).canPop()) {
+                         Navigator.of(context).pop(); 
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('อัปเดตล้มเหลว: ${e.toString()}')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      );
+
+    } catch (e) {
+      // กรณีดึงรายละเอียดหลักสูตรล้มเหลว
+      // ปิด Loading Dialog ที่เปิดไว้ตอนแรก
+      if (Navigator.of(context).canPop()) {
+         Navigator.of(context).pop(); 
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ไม่สามารถโหลดรายละเอียดหลักสูตร: ${e.toString()}')),
+      );
+    }
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1, bool isRequired = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        maxLines: maxLines,
+        validator: isRequired ? (v) => v!.isEmpty ? 'กรุณากรอก$label' : null : null,
+      ),
+    );
+  }
+
+// ----------------------------------------------------------------------
+// 🎨 UI Build Methods
+// ----------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     // 💡 ปรับเป็น Layout แบบมี Sidebar และ Content Area (Desktop/Web)
@@ -328,14 +539,6 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18, color: Colors.black54),
-                  onPressed: () {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('แก้ไขหลักสูตร')),
-                    );
-                  },
-                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -378,7 +581,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     );
   }
   
-  // 🔨 Course Card Widget (ใช้ Card เดียวกับในรูป)
+  // 🔨 Course Card Widget (มีการแก้ไข onTap เพื่อเรียก Dialog)
   Widget _buildCourseCard(ProfessorCourse course, BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -395,11 +598,9 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
         border: Border.all(color: Colors.grey[200]!),
       ),
       child: InkWell(
+        // 🎯 NEW: เรียก Dialog แก้ไข เมื่อแตะที่ Card
         onTap: () {
-          // 💡 Placeholder: ต้องเปลี่ยนไปหน้า CourseProfessorDetailPage
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('กำลังเปิดดูรายละเอียดหลักสูตร ${course.courseName}')),
-          );
+          _showEditCourseDialog(course); 
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

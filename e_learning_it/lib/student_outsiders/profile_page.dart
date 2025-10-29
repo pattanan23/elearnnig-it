@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:e_learning_it/student_outsiders/course/certificate_page.dart';
-import 'dart:math'; // 💡 ต้องเพิ่ม import สำหรับ max
+import 'dart:math';
 
-// ----------------------------------------------------------------------
-// 🎯 CLASS: User (นำ User model มาไว้ที่นี่ชั่วคราว หรือ import เข้ามา)
-// ----------------------------------------------------------------------
 class User {
   final int userId;
   final String firstName;
@@ -42,15 +39,7 @@ class User {
     return '$firstName $lastName';
   }
 
-  String get title {
-    // 💡 แก้ไขการแสดง Title ให้สอดคล้องกับ Role (นิสิต/อาจารย์)
-    if (role == 'อาจารย์') {
-      return 'อาจารย์';
-    } else if (role == 'นิสิต') {
-      return 'นิสิต';
-    }
-    return role; // สำหรับ Role อื่นๆ
-  }
+ 
 }
 
 class UserCertificate {
@@ -100,11 +89,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String _errorMessage = '';
   
   List<UserCertificate> _userCertificates = [];
-  User? _userProfile; // 🎯 เพิ่ม State สำหรับเก็บข้อมูลโปรไฟล์
+  User? _userProfile; 
   
-  // ---------------------------------------------------
-  // 🎯 ฟังก์ชันดึงข้อมูลโปรไฟล์ผู้ใช้
-  // ---------------------------------------------------
   Future<void> _fetchUserProfile() async {
     const String baseApiUrl = 'http://localhost:3006';
     final url = Uri.parse('$baseApiUrl/api/users/${widget.userId}');
@@ -126,9 +112,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // ---------------------------------------------------
-  // 🎯 ฟังก์ชันดึงรายการวุฒิบัตรของผู้ใช้
-  // ---------------------------------------------------
   Future<void> _fetchUserCertificates() async {
     const String baseApiUrl = 'http://localhost:3006';
     final url = Uri.parse('$baseApiUrl/api/certificates/${widget.userId}');
@@ -152,9 +135,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // ---------------------------------------------------
-  // 🎯 ฟังก์ชันรวมสำหรับโหลดข้อมูลทั้งหมด
-  // ---------------------------------------------------
   Future<void> _loadAllData() async {
       setState(() {
       _isLoading = true;
@@ -172,12 +152,9 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    _loadAllData(); // 🎯 เรียกฟังก์ชันโหลดข้อมูลทั้งหมด
+    _loadAllData(); 
   }
 
-  // ---------------------------------------------------
-  // 🎯 Card สำหรับแสดงวุฒิบัตร
-  // ---------------------------------------------------
   Widget _buildCertificateCard(UserCertificate certificate, BuildContext context) {
     const Color actionIconColor = Color(0xFF03A96B);
     const Color courseCodeColor = Color(0xFF1976D2);
@@ -286,9 +263,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ---------------------------------------------------
-  // 🎯 ฟังก์ชันนำทางไปหน้า CertificatePage (โค้ดเดิม)
-  // ---------------------------------------------------
   void _navigateToCertificatePage(BuildContext context, UserCertificate certificate) {
     Navigator.push(
       context,
@@ -358,7 +332,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       const SizedBox(width: 15),
                       Expanded(
                         child: Text(
-                          '${displayUser.title} ${displayFullName}', 
+                          '${displayFullName}', 
                           style: const TextStyle(
                             fontSize: 18, 
                             fontWeight: FontWeight.w600, 
@@ -374,7 +348,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   
                   // รายละเอียด
                   const SizedBox(height: 10),
-                  Text('รหัสผู้ใช้ : ${displayUser.userId}', style: const TextStyle(fontSize: 13)), 
+                  Text('รหัสผู้ใช้ : ${displayUser.studentId}', style: const TextStyle(fontSize: 13)), 
                   const SizedBox(height: 10),
                   Text('อีเมล : ${displayUser.email}', style: const TextStyle(fontSize: 13)), 
                   

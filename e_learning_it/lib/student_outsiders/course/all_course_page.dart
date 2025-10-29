@@ -240,7 +240,7 @@ class CourseAllPage extends StatelessWidget {
               Container(
                 alignment: Alignment.centerLeft, // จัดให้ชิดซ้าย
                 child: const Text(
-                  'หลักสูตร',
+                  'รายวิชา',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -252,7 +252,7 @@ class CourseAllPage extends StatelessWidget {
               // All Courses Section
               _buildCourseSection(
                 context,
-                title: 'หลักสูตรทั้งหมด',
+                title: 'รายวิชาทั้งหมด',
                 futureCourses: fetchAllCourses(), // ดึงหลักสูตรทั้งหมดมาแสดง
                 userName: userName,
                 userId: userId,

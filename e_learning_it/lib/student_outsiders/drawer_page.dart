@@ -74,14 +74,14 @@ class DrawerPage extends StatelessWidget {
             ),
             ExpansionTile(
               leading: const Icon(Icons.book),
-              title: const Text('หลักสูตร'),
+              title: const Text('รายวิชาเรียน'),
               collapsedIconColor: Colors.white,
               iconColor: const Color(0xFF03A96B),
               collapsedTextColor: Colors.white,
               textColor: const Color(0xFF03A96B),
               children: <Widget>[
                ListTile(
-                  title: const Text('หลักสูตรทั้งหมด'),
+                  title: const Text('รายวิชาทั้งหมด'),
                   onTap: () {
                     Navigator.pop(context); // Close the drawer
                     Navigator.push(
@@ -93,7 +93,7 @@ class DrawerPage extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  title: const Text('หลักสูตรใหม่ล่าสุด'),
+                  title: const Text('รายวิชาเพิ่มใหม่ล่าสุด'),
                   onTap: () {
                     Navigator.pop(context); // Close the drawer
                     Navigator.push(

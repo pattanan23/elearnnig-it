@@ -21,7 +21,7 @@ class Course {
   final String professorName;
   final String imageUrl;
   final List<Lesson> lessons;
-  
+  final String? courseCredit; // 🎯 เพิ่ม field นี้
 
   Course({
     required this.courseId,
@@ -34,7 +34,9 @@ class Course {
     required this.professorName,
     required this.imageUrl,
     required this.lessons,
+    this.courseCredit, // 🎯 เพิ่มใน Constructor
   });
+// ...
 
   factory Course.fromJson(Map<String, dynamic> json) {
     var lessonsList = json['lessons'] as List<dynamic>? ?? [];

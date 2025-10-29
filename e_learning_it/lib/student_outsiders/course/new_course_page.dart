@@ -227,7 +227,7 @@ class CourseNewPage extends StatelessWidget {
                 child: const Row(
                   children: [
                     Text(
-                      'หลักสูตร',
+                      'รายวิชา',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -241,7 +241,7 @@ class CourseNewPage extends StatelessWidget {
               // New Courses Section
               _buildCourseSection(
                 context,
-                title: 'หลักสูตรใหม่',
+                title: 'รายวิชาใหม่',
                 futureCourses: fetchNewCourses(),
                 userName: userName,
                 userId: userId,

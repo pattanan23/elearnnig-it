@@ -1380,7 +1380,7 @@ app.get('/api/users-admin', async (req, res) => {
 // **ENDPOINT: PUT /api/users-admin/:userId (Update user)**
 app.put('/api/users-admin/:userId', async (req, res) => {
     // 1. รับ ID ผู้ใช้จาก URL Parameter และแปลงเป็นตัวเลข
-    const userId = parseInt(req.params.userId, 10); 
+    const userId = parseInt(req.params.userId, 10);
 
     // 2. รับข้อมูลจาก Body
     const { first_name, last_name, email, student_id, role } = req.body;
@@ -1409,7 +1409,7 @@ app.put('/api/users-admin/:userId', async (req, res) => {
                 user_id = $6
             RETURNING user_id;
         `;
-        
+
         // 5. ส่งคำสั่งไปยังฐานข้อมูล
         const values = [first_name, last_name, email, finalStudentId, role, userId];
         const result = await pool.query(query, values);
@@ -1424,7 +1424,7 @@ app.put('/api/users-admin/:userId', async (req, res) => {
 
     } catch (err) {
         console.error('Error updating user:', err);
-        
+
         // 🚨 การแก้ไข CRITICAL: จัดการ Unique Constraint Violation (Error Code: 23505)
         if (err.code === '23505') {
             let field = 'ข้อมูล';
@@ -1433,13 +1433,13 @@ app.put('/api/users-admin/:userId', async (req, res) => {
             } else if (err.constraint === 'users_student_id_key') {
                 field = 'รหัสนิสิต';
             }
-            return res.status(409).json({ 
-                message: `${field} ที่คุณระบุมีผู้ใช้งานอยู่แล้ว กรุณาใช้ ${field} อื่น` 
+            return res.status(409).json({
+                message: `${field} ที่คุณระบุมีผู้ใช้งานอยู่แล้ว กรุณาใช้ ${field} อื่น`
             });
         }
 
         // ส่ง Error ที่แท้จริงจาก Postgres กลับไป
-        const errorMessage = err.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะอัปเดตข้อมูล'; 
+        const errorMessage = err.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะอัปเดตข้อมูล';
         res.status(500).json({ message: errorMessage });
     }
 });
@@ -1463,7 +1463,7 @@ app.get('/api/courses-admin', async (req, res) => {
         res.status(200).json(result.rows);
     } catch (err) {
         // ข้อความ Error ที่ถูกบันทึกไว้ใน console.error
-        console.error('Error fetching courses:', err); 
+        console.error('Error fetching courses:', err);
         res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลคอร์ส' });
     }
 });
@@ -1473,7 +1473,7 @@ app.get('/api/courses-admin', async (req, res) => {
 app.put('/api/courses-admin/:courseId', async (req, res) => {
     const courseId = req.params.courseId;
     // รับเฉพาะ course_code
-    const { course_code } = req.body; 
+    const { course_code } = req.body;
 
     if (!course_code) {
         return res.status(400).json({ message: 'กรุณากรอกรหัสวิชา' });
@@ -1488,7 +1488,7 @@ app.put('/api/courses-admin/:courseId', async (req, res) => {
             WHERE course_id = $2
             RETURNING course_id;
         `;
-        
+
         const values = [course_code, courseId]; // ใช้แค่ course_code และ courseId
         const result = await pool.query(query, values);
 
@@ -1500,18 +1500,18 @@ app.put('/api/courses-admin/:courseId', async (req, res) => {
 
     } catch (err) {
         console.error('Error updating course:', err);
-        
+
         // จัดการ Unique Constraint Violation
         if (err.code === '23505') {
             let field = 'ข้อมูล';
             if (err.constraint === 'courses_course_code_key') {
                 field = 'รหัสวิชา';
             }
-            return res.status(409).json({ 
-                message: `${field} ที่คุณระบุมีอยู่แล้ว กรุณาใช้ ${field} อื่น` 
+            return res.status(409).json({
+                message: `${field} ที่คุณระบุมีอยู่แล้ว กรุณาใช้ ${field} อื่น`
             });
         }
-        
+
         res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลคอร์ส' });
     }
 });
@@ -1558,7 +1558,7 @@ app.post('/api/password/request_reset', async (req, res) => {
         const user = userResult.rows[0];
         const otpCode = generateOTP();
         // กำหนดเวลาหมดอายุ 10 นาที
-        const expirationTime = new Date(Date.now() + 10 * 60 * 1000); 
+        const expirationTime = new Date(Date.now() + 10 * 60 * 1000);
 
         // 2. ลบ OTP เก่าของ User นี้ (ป้องกันการสแปม)
         await pool.query('DELETE FROM password_resets WHERE user_id = $1', [user.user_id]);
@@ -1572,14 +1572,14 @@ app.post('/api/password/request_reset', async (req, res) => {
 
         // 4. *** ส่วนส่งอีเมลจริง ***
         const emailSent = await sendOTPEmail(user.email, otpCode);
-        
+
         if (!emailSent) {
             // ถ้าส่งไม่สำเร็จ ให้ส่ง 500 กลับไปพร้อมข้อความแจ้งผู้ใช้
-            return res.status(500).json({ 
-                message: 'เกิดข้อผิดพลาดในการส่งอีเมล OTP (โปรดตรวจสอบ App Password และการเชื่อมต่อของ Server)' 
+            return res.status(500).json({
+                message: 'เกิดข้อผิดพลาดในการส่งอีเมล OTP (โปรดตรวจสอบ App Password และการเชื่อมต่อของ Server)'
             });
         }
-        
+
         // 5. ส่งการตอบกลับ
         res.status(200).json({
             message: 'ส่งรหัส OTP ไปยังอีเมลเรียบร้อยแล้ว กรุณาตรวจสอบอีเมลของคุณ'
@@ -1598,7 +1598,7 @@ app.post('/api/password/reset', async (req, res) => {
     if (!identifier || !otp_code || !new_password) {
         return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน: Email/รหัสนิสิต, รหัส OTP, และรหัสผ่านใหม่' });
     }
-    
+
     // ใช้ Transaction เพื่อให้แน่ใจว่าการอัปเดตและลบเกิดขึ้นพร้อมกัน
     const client = await pool.connect();
 
@@ -1610,12 +1610,12 @@ app.post('/api/password/reset', async (req, res) => {
         const userResult = await client.query(userQuery, [identifier]);
 
         if (userResult.rows.length === 0) {
-            await client.query('COMMIT'); 
+            await client.query('COMMIT');
             return res.status(404).json({ message: 'ไม่พบผู้ใช้ที่ระบุ' });
         }
 
         const userId = userResult.rows[0].user_id;
-        
+
         // 2. ตรวจสอบ OTP: ตรงกันหรือไม่ และยังไม่หมดอายุ (expires_at > NOW())
         const otpCheckQuery = `
             SELECT id
@@ -1627,10 +1627,10 @@ app.post('/api/password/reset', async (req, res) => {
         const otpResult = await client.query(otpCheckQuery, [userId, otp_code]);
 
         if (otpResult.rows.length === 0) {
-            await client.query('COMMIT'); 
+            await client.query('COMMIT');
             return res.status(401).json({ message: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว' });
         }
-        
+
         // 3. เข้ารหัสรหัสผ่านใหม่
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(new_password, saltRounds);
@@ -1658,6 +1658,101 @@ app.post('/api/password/reset', async (req, res) => {
         res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ขณะรีเซ็ตรหัสผ่าน' });
     } finally {
         client.release(); // คืน Client สู่ Pool
+    }
+});
+
+app.get('/api/courses/:courseId', async (req, res) => {
+    const { courseId } = req.params;
+
+    // ตรวจสอบความถูกต้องของ courseId ที่ส่งมา
+    if (!courseId || isNaN(parseInt(courseId))) {
+        return res.status(400).json({ message: 'รหัสหลักสูตรไม่ถูกต้อง' });
+    }
+
+    const client = await pool.connect();
+    try {
+        const query = `
+    SELECT 
+        course_id, 
+        course_code, 
+        course_name, 
+        short_description, 
+        description, 
+        objective, 
+    FROM courses 
+    WHERE course_id = $1
+`;
+
+        const result = await client.query(query, [courseId]);
+
+        if (result.rows.length === 0) {
+            // สำคัญ: คืน 404 เมื่อไม่พบข้อมูล แต่ไม่ควรขึ้น 404 จากการหา Route ไม่เจอ
+            return res.status(404).json({ message: 'ไม่พบคอร์สเรียนที่ระบุในฐานข้อมูล' });
+        }
+
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        console.error("Error fetching course details:", error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการดึงข้อมูลหลักสูตร' });
+    } finally {
+        client.release();
+    }
+});
+
+
+app.put('/api/courses/:courseId', async (req, res) => {
+    const { courseId } = req.params;
+    const {
+        course_code,
+        course_name,
+        short_description,
+        description,
+        objective
+    } = req.body;
+
+    // 💡 ควรมีการตรวจสอบข้อมูลใน req.body ว่าไม่เป็นค่าว่างก่อนดำเนินการต่อ
+
+    const client = await pool.connect();
+    try {
+        const updateQuery = `
+            UPDATE courses
+            SET 
+                course_code = $1,
+                course_name = $2,
+                short_description = $3,
+                description = $4,
+                objective = $5
+            WHERE 
+                course_id = $6
+            RETURNING *;
+        `;
+
+        const values = [
+            course_code,
+            course_name,
+            short_description,
+            description,
+            objective,
+            courseId
+        ];
+
+        const result = await client.query(updateQuery, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'ไม่พบคอร์สเรียนที่ต้องการแก้ไข' });
+        }
+
+        res.status(200).json({
+            message: 'อัปเดตข้อมูลคอร์สเรียนสำเร็จ',
+            course: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error updating course details:", error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการอัปเดตข้อมูลหลักสูตร' });
+    } finally {
+        client.release();
     }
 });
 

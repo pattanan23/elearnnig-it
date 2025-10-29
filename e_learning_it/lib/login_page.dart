@@ -7,7 +7,8 @@ import 'error_dialog_page.dart'; // Import หน้า Dialog Box ที่ส�
 import 'login/membership.dart'; // Import หน้า MembershipPage
 import 'professor/main_professor_page.dart'; // Import หน้าสำหรับอาจารย์
 import 'admin/admin_login_page.dart';
-import 'login/reset_password_request.dart'; // 💡 NEW: Import หน้าขอรีเซ็ตรหัสผ่าน
+import 'login/reset_password_request.dart'; 
+import 'admin/main_admin_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,11 +52,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 builder: (context) => MainProfessorPage(userName: userName, userId: userId),
               ),
             );
-          } else {
+          } else if (userRole == 'แอดมิน') {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => AdminMainPage(userName: userName, userId: userId),
+              ),
+            );
+          } else if (userRole == 'นิสิต') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => MainPage(userName: userName, userId: userId),
               ),
+            );
+          } else {
+            // กรณี role ไม่ตรงกับที่กำหนด
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return const ErrorDialogPage(
+                  message: 'บทบาทผู้ใช้ไม่ถูกต้อง',
+                );
+              },
             );
           }
 
@@ -228,25 +245,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
           
-          // ปุ่มระบบผู้ดูแล (ยังคงอยู่ด้านล่างสุด)
-          TextButton(
-            onPressed: () {
-              // นำทางไปที่หน้า AdminLoginPage
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AdminLoginPage(),
-                ),
-              );
-            },
-            child: const Text(
-              'ระบบผู้ดูแล', // ข้อความที่คุณขอ
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 16,
-                decoration: TextDecoration.underline, // เพิ่มขีดเส้นใต้เพื่อให้ดูเหมือนลิงก์
-              ),
-            ),
-          ),
         ],
       ),
     );
