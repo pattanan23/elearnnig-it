@@ -218,7 +218,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'หลักสูตร: ${certificate.courseName}',
+                        'วิชา: ${certificate.courseName}',
                         style: const TextStyle(fontSize: 9, color: Colors.black54), 
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

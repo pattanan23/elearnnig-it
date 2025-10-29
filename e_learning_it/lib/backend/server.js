@@ -1661,42 +1661,64 @@ app.post('/api/password/reset', async (req, res) => {
     }
 });
 
-app.get('/api/courses/:courseId', async (req, res) => {
+
+
+app.get('/api/course/:courseId', async (req, res) => {
     const { courseId } = req.params;
+    let client;
 
-    // ตรวจสอบความถูกต้องของ courseId ที่ส่งมา
-    if (!courseId || isNaN(parseInt(courseId))) {
-        return res.status(400).json({ message: 'รหัสหลักสูตรไม่ถูกต้อง' });
-    }
-
-    const client = await pool.connect();
     try {
-        const query = `
-    SELECT 
-        course_id, 
-        course_code, 
-        course_name, 
-        short_description, 
-        description, 
-        objective, 
-    FROM courses 
-    WHERE course_id = $1
-`;
+        client = await pool.connect();
+        
+        // 1. ดึงข้อมูลหลักสูตรหลัก (ใช้ SELECT * เพื่อดึงคอลัมน์ name_image และอื่นๆ)
+        const courseQuery = `SELECT * FROM courses WHERE course_id = $1`;
+        const courseResult = await client.query(courseQuery, [courseId]);
 
-        const result = await client.query(query, [courseId]);
-
-        if (result.rows.length === 0) {
-            // สำคัญ: คืน 404 เมื่อไม่พบข้อมูล แต่ไม่ควรขึ้น 404 จากการหา Route ไม่เจอ
-            return res.status(404).json({ message: 'ไม่พบคอร์สเรียนที่ระบุในฐานข้อมูล' });
+        if (courseResult.rows.length === 0) {
+            client.release();
+            return res.status(404).json({ message: 'ไม่พบคอร์สเรียน' });
         }
 
-        res.status(200).json(result.rows[0]);
+        const courseRow = courseResult.rows[0];
+
+        // 2. ดึงข้อมูลบทเรียน
+        // (สมมติว่าตาราง lessons มีคอลัมน์ lesson_id, lesson_name, lesson_description, video_file)
+        const lessonQuery = `SELECT lesson_id, lesson_name, lesson_description, video_file FROM lessons WHERE course_id = $1 ORDER BY lesson_id`;
+        const lessonResult = await client.query(lessonQuery, [courseId]);
+        
+        client.release();
+
+        // 3. จัดรูปแบบข้อมูล
+        const courseDetail = {
+            courseId: courseRow.course_id.toString(),
+            userId: courseRow.user_id ? courseRow.user_id.toString() : 'N/A', 
+            courseCode: courseRow.course_code,
+            courseName: courseRow.course_name,
+            shortDescription: courseRow.short_description,
+            description: courseRow.description,
+            objective: courseRow.objective,
+            
+            professorName: 'ไม่ระบุ', // ตั้งค่าคงที่
+            
+            // ✅ ใช้ courseRow.name_image
+            imageUrl: courseRow.name_image ? `${process.env.BASE_URL || 'http://localhost:3006'}/data/images/course_images/${courseRow.name_image}` : null,
+            
+            lessons: lessonResult.rows.map(lesson => ({
+                id: lesson.lesson_id.toString(),
+                videoName: lesson.lesson_name,
+                videoDescription: lesson.lesson_description,
+                videoUrl: lesson.video_file,
+            })),
+        };
+
+        res.status(200).json(courseDetail);
 
     } catch (error) {
         console.error("Error fetching course details:", error);
-        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการดึงข้อมูลหลักสูตร' });
-    } finally {
-        client.release();
+        if (client) {
+            client.release();
+        }
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการดึงรายละเอียดคอร์ส', details: error.message });
     }
 });
 
@@ -1753,6 +1775,70 @@ app.put('/api/courses/:courseId', async (req, res) => {
         res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการอัปเดตข้อมูลหลักสูตร' });
     } finally {
         client.release();
+    }
+});
+
+app.get('/api/search-courses', async (req, res) => {
+    let client;
+    const { query } = req.query; // ดึง query string
+    const sanitizedQuery = (query || '').trim();
+
+    // ถ้า Query ว่าง ให้คืน Array เปล่า (เพื่อให้ Flutter กลับไปแสดงผลทั้งหมด)
+    if (!sanitizedQuery) {
+        return res.status(200).json([]);
+    }
+
+    try {
+        const sqlQuery = `
+            SELECT
+                c.course_id,
+                c.course_code,
+                c.course_name,
+                c.short_description,
+                c.name_image,
+                c.user_id,
+                u.first_name,
+                u.last_name
+            FROM courses c
+            JOIN users u ON c.user_id = u.user_id
+            WHERE 
+                c.course_name ILIKE $1 OR c.course_code ILIKE $1
+            ORDER BY
+                c.course_id DESC
+        `;
+        
+        const queryValues = [`%${sanitizedQuery}%`]; 
+
+        client = await pool.connect();
+        const result = await client.query(sqlQuery, queryValues);
+        client.release(); 
+
+        // 🎯 MAPPING: ใช้ logic เดียวกับ /api/show_courses ในการคำนวณ image_url
+        const courses = result.rows.map(row => {
+            // 💡 [FIX] คำนวณ image_url ที่ Flutter คาดหวัง
+            const image_url = row.name_image
+                // ตรวจสอบ Path และ Port ตามการตั้งค่าของคุณ
+                ? `http://${req.hostname}:${port}/data/${row.user_id}/${row.course_id}/image/${row.name_image}`
+                : null;
+                
+            return {
+                course_id: row.course_id.toString(),
+                course_code: row.course_code || '',
+                course_name: row.course_name || '',
+                short_description: row.short_description || '',
+                image_url: image_url, // ส่ง key เป็น image_url
+                professor_name: `${row.first_name || ''} ${row.last_name || ''}`
+            };
+        });
+
+        res.status(200).json(courses);
+
+    } catch (error) {
+        console.error("Error searching courses:", error);
+        if (client) {
+            client.release();
+        }
+        res.status(500).json({ error: 'Internal server error during search', details: error.message });
     }
 });
 
