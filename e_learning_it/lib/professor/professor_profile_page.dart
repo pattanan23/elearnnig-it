@@ -6,6 +6,7 @@ import 'dart:math';
 // ----------------------------------------------------------------------
 // 🎯 Global Constant: API Base URL
 // ----------------------------------------------------------------------
+// 💡 NOTE: ถ้าใช้ Android Emulator, ให้เปลี่ยนเป็น 'http://10.0.2.2:3006'
 const String BASE_URL = 'http://localhost:3006';
 
 // ----------------------------------------------------------------------
@@ -69,7 +70,7 @@ class ProfessorCourse {
 }
 
 // ----------------------------------------------------------------------
-// 🎯 FULL Course Model (ใหม่! สำหรับใช้ใน Dialog แก้ไข) 
+// 🎯 FULL Course Model (สำหรับใช้ใน Dialog แก้ไข) 
 // ----------------------------------------------------------------------
 class FullCourseDetails {
   final String courseId; 
@@ -103,6 +104,9 @@ class FullCourseDetails {
   }
 }
 
+// ----------------------------------------------------------------------
+// 🎯 MAIN PAGE: ProfessorProfilePage
+// ----------------------------------------------------------------------
 class ProfessorProfilePage extends StatefulWidget {
   final String userName; 
   final String userId;
@@ -154,7 +158,9 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      _userProfile = ProfessorUser.fromJson(data);
+      // ตรวจสอบว่า API คืนค่าเป็น List หรือไม่ (หากเป็นให้ใช้ first element)
+      final profileData = (data is List) ? data.first : data; 
+      _userProfile = ProfessorUser.fromJson(profileData);
     } else {
       throw Exception('ไม่สามารถดึงข้อมูลโปรไฟล์ได้ (Status: ${response.statusCode})');
     }
@@ -173,25 +179,26 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       setState(() {
         _professorCourses = [];
       });
+      // ไม่ต้อง Throw Exception หากแค่ไม่มีคอร์ส
     }
   }
   
-  // ⚙️ API NEW: ดึงรายละเอียดหลักสูตรแบบเต็ม (เพื่อนำมากรอกใน Pop-up ก่อนแก้ไข)
+  // ⚙️ API NEW: ดึงรายละเอียดหลักสูตรแบบเต็ม (GET /api/courses/:courseId)
   Future<FullCourseDetails> _fetchCourseDetails(String courseId) async {
-    final url = Uri.parse('$BASE_URL/api/courses/$courseId'); // สมมติว่ามี API นี้อยู่
+    final url = Uri.parse('$BASE_URL/api/courses/$courseId'); 
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      // API อาจจะส่งข้อมูลเป็น Array ถ้าเป็นเช่นนั้นต้องแก้ตรงนี้
-      // สำหรับโค้ดนี้ สมมติว่าส่งเป็น Object { ... }
-      return FullCourseDetails.fromJson(data);
+      final data = json.decode(utf8.decode(response.bodyBytes)); // ใช้ utf8.decode
+      // API ควรจะคืนค่าเป็น Object เดียว { ... }
+      final detailsData = (data is List) ? data.first : data;
+      return FullCourseDetails.fromJson(detailsData);
     } else {
       throw Exception('ไม่สามารถดึงรายละเอียดหลักสูตรได้ (Status: ${response.statusCode})');
     }
   }
   
-  // ⚙️ API NEW: อัปเดตข้อมูลหลักสูตรผ่าน API
+  // ⚙️ API NEW: อัปเดตข้อมูลหลักสูตรผ่าน API (PUT /api/courses/:courseId)
   Future<void> _updateCourseDetails(FullCourseDetails course) async {
     final url = Uri.parse('$BASE_URL/api/courses/${course.courseId}'); 
     final response = await http.put(
@@ -200,13 +207,12 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: jsonEncode(<String, dynamic>{
-        // ฟิลด์ต้องตรงกับ SQL Update Query: course_code, course_name, short_description, description, objective
+        // ฟิลด์ต้องตรงกับ SQL Update Query ใน server.js
         'course_code': course.courseCode,
         'course_name': course.courseName,
         'short_description': course.shortDescription,
         'description': course.description,
         'objective': course.objective,
-        // course_id ถูกใช้เป็น $6 ใน WHERE clause ใน SQL Query (ส่งใน URL แล้ว)
       }),
     );
 
@@ -220,7 +226,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
 
 
 // ----------------------------------------------------------------------
-// 📝 Edit Dialog Widget (ใหม่! สำหรับการแก้ไข)
+// 📝 Edit Dialog Widget
 // ----------------------------------------------------------------------
   void _showEditCourseDialog(ProfessorCourse course) async {
     // แสดง CircularProgressIndicator ขณะโหลดรายละเอียดเต็ม
@@ -231,7 +237,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     );
 
     try {
-      // 1. ดึงรายละเอียดฉบับเต็มมากรอกในฟอร์ม
+      // 1. ดึงรายละเอียดฉบับเต็มมากรอกในฟอร์ม (GET Request)
       final details = await _fetchCourseDetails(course.courseId);
       
       // ปิด Loading Dialog
@@ -289,9 +295,11 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                       imageUrl: details.imageUrl, // ใช้รูปภาพเดิม
                     );
 
-                    // 4. เรียกฟังก์ชันอัปเดต
+                    // 4. เรียกฟังก์ชันอัปเดต (PUT Request)
                     try {
-                      Navigator.of(dialogContext).pop(); // ปิด Dialog ก่อนส่งข้อมูล
+                      // ปิด Dialog แก้ไข
+                      Navigator.of(dialogContext).pop(); 
+                      
                       // แสดง Loading indicator อีกครั้ง (Optional)
                       showDialog(
                         context: context,
@@ -310,7 +318,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                     } catch (e) {
                       // ปิด Loading indicator หากมี
                       if (Navigator.of(context).canPop()) {
-                         Navigator.of(context).pop(); 
+                          Navigator.of(context).pop(); 
                       }
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('อัปเดตล้มเหลว: ${e.toString()}')),
@@ -325,10 +333,10 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       );
 
     } catch (e) {
-      // กรณีดึงรายละเอียดหลักสูตรล้มเหลว
+      // กรณีดึงรายละเอียดหลักสูตรล้มเหลว (เช่น 404 Not Found)
       // ปิด Loading Dialog ที่เปิดไว้ตอนแรก
       if (Navigator.of(context).canPop()) {
-         Navigator.of(context).pop(); 
+          Navigator.of(context).pop(); 
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('ไม่สามารถโหลดรายละเอียดหลักสูตร: ${e.toString()}')),
@@ -356,26 +364,22 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
 // ----------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    // 💡 ปรับเป็น Layout แบบมี Sidebar และ Content Area (Desktop/Web)
     return Scaffold(
       appBar: AppBar(
-        // สีเขียวตามภาพ Screenshot 2025-10-13 105411.png
         backgroundColor: const Color(0xFF03A96B),
-        // ทำให้ปุ่มย้อนกลับแสดงผล (ถ้าหน้าจอนี้ถูก push มา)
         automaticallyImplyLeading: true, 
         title: const Text(
           'My Profile', 
           style: TextStyle(color: Colors.white),
         ),
-        // สีไอคอนเป็นสีขาวตามภาพ
         iconTheme: const IconThemeData(color: Colors.white), 
       ),
       // Main Content Area
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
-              ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)))
-              : _buildProfileContent(context),
+                ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)))
+                : _buildProfileContent(context),
     );
   }
 
@@ -399,7 +403,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
           ),
           const Divider(height: 20, thickness: 1),
 
-          // Two main cards (Profile Info Card and Courses Card) - ใช้ Row สำหรับ Desktop
+          // Two main cards (Profile Info Card and Courses Card)
           LayoutBuilder(
             builder: (context, constraints) {
               final isWideScreen = constraints.maxWidth > 800;
@@ -410,14 +414,14 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                 children: [
                   Flexible(
                     flex: isWideScreen ? 1 : 0, 
-                    child: _buildPersonalInfoCard(), // 🎯 แก้ไข Right Overflow ที่นี่
+                    child: _buildPersonalInfoCard(), // แก้ Right Overflow แล้ว
                   ),
                   
                   SizedBox(width: isWideScreen ? 20 : 0, height: isWideScreen ? 0 : 20),
 
                   Flexible(
                     flex: isWideScreen ? 1 : 0, 
-                    child: _buildProfessorCoursesCard(context), // 🎯 Responsive Grid (แก้ Right Overflow ที่นี่แล้ว)
+                    child: _buildProfessorCoursesCard(context), // Responsive Grid (แก้ Right Overflow แล้ว)
                   ),
                 ],
               );
@@ -510,7 +514,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 
-  // Card 2: Professor Courses (หลักสูตรของฉัน) - 💡 Responsive Grid (แก้ Right Overflow แล้ว)
+  // Card 2: Professor Courses (หลักสูตรของฉัน)
   Widget _buildProfessorCoursesCard(BuildContext context) {
     // แสดงหลักสูตรสูงสุด 4 รายการ
     final List<ProfessorCourse> coursesToShow = _professorCourses.take(4).toList(); 

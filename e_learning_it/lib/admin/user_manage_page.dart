@@ -3,9 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:e_learning_it/admin/error_dialog_page.dart';
-import 'navbar_admin.dart'; 
-import 'drawer_admin.dart'; 
+import 'package:e_learning_it/admin/error_dialog_page.dart'; // ตรวจสอบ path
+import 'navbar_admin.dart'; // ตรวจสอบ path
+import 'drawer_admin.dart'; // ตรวจสอบ path
 
 // **NOTE:** แทนที่ด้วย Base URL ที่ถูกต้องของคุณ
 const String API_BASE_URL = 'http://localhost:3006/api'; 
@@ -31,22 +31,22 @@ class _UserManagementPageState extends State<UserManagementPage> {
   List<dynamic> _allUsers = []; 
   List<dynamic> _filteredUsers = []; 
   bool _isLoading = true;
-  String _selectedRole = 'นิสิต'; 
+  String _selectedRole = 'ทั้งหมด'; // 💡 เปลี่ยนค่าเริ่มต้นเป็น 'ทั้งหมด'
+  String _searchQuery = ''; 
 
-  // Role Options ที่ใช้ใน UI Tabs
+  // Role Options ที่ใช้ใน UI Tabs (เพิ่ม 'ทั้งหมด')
   final Map<String, String> _roleOptions = {
+    'ทั้งหมด': 'ทั้งหมด', // 💡 แท็บใหม่
     'นิสิต': 'นิสิต', 
     'อาจารย์': 'อาจารย์', 
     'บุคคลภายนอก': 'บุคคลภายนอก', 
   };
   
-  // Role Options ที่ใช้ใน Edit Dialog (อาจมีบทบาทเพิ่มเติม เช่น admin/user)
+  // Role Options ที่ใช้ใน Edit Dialog 
   final List<String> _dialogRoleOptions = [
     'นิสิต', 
     'บุคคลภายนอก', 
-    'อาจารย์', 
-    'user', 
-    'admin'
+    'อาจารย์'
   ];
 
   @override
@@ -59,15 +59,41 @@ class _UserManagementPageState extends State<UserManagementPage> {
   // DATA AND FILTERING LOGIC
   // -----------------------------------------------------
   
-  // กรองข้อมูลผู้ใช้ตาม Role ที่เลือก
+  // กรองข้อมูลผู้ใช้ตาม Role ที่เลือก (เรียกใช้ฟังก์ชันหลัก)
   void _filterUsersByRole(String role) {
     setState(() {
       _selectedRole = role;
-      _filteredUsers = _allUsers
-          .where((user) => user['role'] == role)
-          .toList();
+      _filterAndSearchUsers(); // 🎯 เรียกฟังก์ชันกรองหลัก
     });
   }
+
+  // 💡 แก้ไข: ฟังก์ชันกรองหลักที่รวมทั้ง Role Filter และ Search Query
+  void _filterAndSearchUsers() {
+    setState(() {
+      // เริ่มต้นด้วยข้อมูลทั้งหมด
+      Iterable<dynamic> currentFiltered = _allUsers;
+      
+      // 1. กรองตาม Role ที่เลือก (ถ้าไม่ใช่ 'ทั้งหมด')
+      if (_selectedRole != 'ทั้งหมด') {
+        currentFiltered = currentFiltered
+            .where((user) => user['role'] == _selectedRole);
+      }
+      
+      // 2. กรองตาม Search Query
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery;
+        currentFiltered = currentFiltered.where((user) {
+          final fullName = '${user['first_name']} ${user['last_name']}'.toLowerCase();
+          final email = user['email']?.toLowerCase() ?? '';
+          
+          return fullName.contains(query) || email.contains(query);
+        });
+      }
+
+      _filteredUsers = currentFiltered.toList();
+    });
+  }
+
 
   // API: ดึงข้อมูลผู้ใช้ทั้งหมด
   Future<void> _fetchUsers() async {
@@ -83,7 +109,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
         final List<dynamic> fetchedUsers = json.decode(response.body);
         setState(() {
           _allUsers = fetchedUsers;
-          _filterUsersByRole(_selectedRole); 
+          // 🎯 เรียกฟังก์ชันกรอง/ค้นหาหลักหลังจากดึงข้อมูล
+          _filterAndSearchUsers(); 
         });
       } else {
         String errorMessage = 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้: Status Code ${response.statusCode}';
@@ -129,6 +156,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
             _buildHeader(),
             const SizedBox(height: 20),
             
+            // 💡 เพิ่มช่องค้นหา
+            _buildSearchBar(), 
+            
             // ส่วน Role Tabs
             _buildRoleTabs(),
             const SizedBox(height: 10),
@@ -168,7 +198,33 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  // 💡 แก้ไข: ใช้ SingleChildScrollView ในแนวนอนเพื่อให้ Tabs เลื่อนได้บนจอเล็ก
+  // 💡 ช่องค้นหา (Search Bar)
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'ค้นหาจากชื่อผู้ใช้ หรืออีเมล...',
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 15),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+            _filterAndSearchUsers(); 
+          });
+        },
+      ),
+    );
+  }
+
+
   Widget _buildRoleTabs() {
     return SingleChildScrollView( 
       scrollDirection: Axis.horizontal,
@@ -199,15 +255,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
   
-  // 💡 แก้ไข: ปรับใช้ SingleChildScrollView (แนวนอน) เพื่อรองรับ DataTable บนจอขนาดเล็ก
+  // 💡 Body Content
   Widget _buildBodyContent() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_filteredUsers.isEmpty) {
+      final roleText = _selectedRole == 'ทั้งหมด' ? 'ทั้งหมด' : 'บทบาท "$_selectedRole"';
       return Center(
-        child: Text('ไม่พบข้อมูลผู้ใช้สำหรับบทบาท "$_selectedRole"',
+        child: Text('ไม่พบข้อมูลผู้ใช้สำหรับ$roleText',
             style: const TextStyle(fontSize: 16, color: Colors.grey)),
       );
     }
@@ -225,13 +282,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
         ],
       ),
-      // 🎯 FIX: ใช้ SingleChildScrollView ในแนวนอน 
-      // เพื่อให้ผู้ใช้เลื่อนดูตารางได้เมื่อคอลัมน์เกินความกว้างหน้าจอ
       child: SingleChildScrollView( 
-        scrollDirection: Axis.horizontal, // 💡 สำคัญ: Horizontal scrolling
-        child: ConstrainedBox( // 💡 ConstrainedBox และ LayoutBuilder ถูกนำออกไป
-          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40), // กำหนดความกว้างขั้นต่ำเท่ากับพื้นที่หน้าจอ - padding
-          child: SingleChildScrollView( // 💡 Vertical scrolling สำหรับรายการในตาราง
+        scrollDirection: Axis.horizontal, 
+        child: ConstrainedBox( 
+          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40), 
+          child: SingleChildScrollView( 
             scrollDirection: Axis.vertical,
             child: _buildDataTable(),
           ),
@@ -240,44 +295,69 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
   
-  // 💡 แก้ไข: ลบ Expanded ใน DataColumn/DataRowCell เพื่อให้ตารางใช้พื้นที่ตามที่กำหนดและรองรับ Horizontal Scroll
+  // 💡 Data Table
   Widget _buildDataTable() {
+    // 💡 กำหนดคอลัมน์เริ่มต้น (มี 3 คอลัมน์หลัก + 1 คอลัมน์แก้ไข)
+    List<DataColumn> columns = [
+        DataColumn(label: Container(width: 150, alignment: Alignment.centerLeft, child: const Text('ชื่อผู้ใช้', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(label: Container(width: 200, alignment: Alignment.centerLeft, child: const Text('อีเมล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+    ];
+    
+    // เพิ่มคอลัมน์บทบาท ถ้าเลือก 'ทั้งหมด'
+    if (_selectedRole == 'ทั้งหมด') {
+        columns.add(DataColumn(label: Container(width: 80, alignment: Alignment.centerLeft, child: const Text('บทบาท', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))));
+    }
+    
+    // เพิ่มคอลัมน์รหัสนิสิต ถ้าเลือก 'นิสิต'
+    if (_selectedRole == 'นิสิต') {
+        columns.add(DataColumn(label: Container(width: 100, alignment: Alignment.centerLeft, child: const Text('รหัสนิสิต', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))));
+    }
+    
+    // เพิ่มคอลัมน์แก้ไขข้อมูล
+    columns.add(const DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))));
+
+
     return DataTable(
       dataRowMinHeight: 50, 
       dataRowMaxHeight: 60,
       headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
-      columnSpacing: 20.0, // ปรับ Column Spacing ให้เหมาะสม
-      columns: [
-        // กำหนดความกว้างขั้นต่ำของคอลัมน์ (เพื่อรองรับจอเล็ก)
-        DataColumn(label: Container(width: 150, alignment: Alignment.centerLeft, child: const Text('ชื่อผู้ใช้', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        DataColumn(label: Container(width: 200, alignment: Alignment.centerLeft, child: const Text('อีเมล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        
-        // แสดง 'รหัสนิสิต' เมื่อเลือก 'นิสิต' เท่านั้น
-        if (_selectedRole == 'นิสิต') 
-          DataColumn(label: Container(width: 100, alignment: Alignment.centerLeft, child: const Text('รหัสนิสิต', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        
-        // คอลัมน์ 'แก้ไขข้อมูล'
-        const DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
-      ],
+      columnSpacing: 20.0, 
+      columns: columns, // ใช้รายการ columns ที่สร้างไว้
       rows: _filteredUsers.map<DataRow>((user) {
         final fullName = '${user['first_name']} ${user['last_name']}';
-        return DataRow(
-          cells: [
+        
+        List<DataCell> cells = [
             DataCell(SizedBox(width: 150, child: Text(fullName, overflow: TextOverflow.ellipsis))),
             DataCell(SizedBox(width: 200, child: Text(user['email'], overflow: TextOverflow.ellipsis))),
-            // แสดงรหัสนิสิตในช่องที่ 3 ถ้าเป็นบทบาท 'นิสิต'
-            if (_selectedRole == 'นิสิต') 
-              DataCell(SizedBox(width: 100, child: Text(user['student_id'] ?? '-', overflow: TextOverflow.ellipsis))),
+        ];
+        
+        // เพิ่มเซลล์บทบาท ถ้าเลือก 'ทั้งหมด'
+        if (_selectedRole == 'ทั้งหมด') {
+            cells.add(
+                DataCell(SizedBox(width: 80, child: Text(user['role'] ?? '-', overflow: TextOverflow.ellipsis)))
+            );
+        }
+
+        // เพิ่มเซลล์รหัสนิสิต ถ้าเลือก 'นิสิต'
+        if (_selectedRole == 'นิสิต') {
+            cells.add(
+                DataCell(SizedBox(width: 100, child: Text(user['student_id'] ?? '-', overflow: TextOverflow.ellipsis)))
+            );
+        }
+        
+        // เพิ่มคอลัมน์แก้ไขข้อมูล
+        cells.add(
             DataCell(
-              Center( 
-                child: IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.redAccent), 
-                  onPressed: () => _showEditDialog(user),
+                Center( 
+                    child: IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.redAccent), 
+                        onPressed: () => _showEditDialog(user),
+                    ),
                 ),
-              ),
-            ),
-          ],
+            )
         );
+
+        return DataRow(cells: cells);
       }).toList(),
     );
   }

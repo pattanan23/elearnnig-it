@@ -1469,53 +1469,6 @@ app.get('/api/courses-admin', async (req, res) => {
 });
 
 
-// 2. PUT: อัปเดตข้อมูลคอร์ส (Update Course)
-app.put('/api/courses-admin/:courseId', async (req, res) => {
-    const courseId = req.params.courseId;
-    // รับเฉพาะ course_code
-    const { course_code } = req.body;
-
-    if (!course_code) {
-        return res.status(400).json({ message: 'กรุณากรอกรหัสวิชา' });
-    }
-
-    try {
-        // Query สำหรับอัปเดตแค่ course_code
-        const query = `
-            UPDATE courses
-            SET 
-                course_code = $1     
-            WHERE course_id = $2
-            RETURNING course_id;
-        `;
-
-        const values = [course_code, courseId]; // ใช้แค่ course_code และ courseId
-        const result = await pool.query(query, values);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'ไม่พบข้อมูลคอร์สที่ต้องการแก้ไข' });
-        }
-
-        res.status(200).json({ message: 'อัปเดตข้อมูลคอร์สสำเร็จ' });
-
-    } catch (err) {
-        console.error('Error updating course:', err);
-
-        // จัดการ Unique Constraint Violation
-        if (err.code === '23505') {
-            let field = 'ข้อมูล';
-            if (err.constraint === 'courses_course_code_key') {
-                field = 'รหัสวิชา';
-            }
-            return res.status(409).json({
-                message: `${field} ที่คุณระบุมีอยู่แล้ว กรุณาใช้ ${field} อื่น`
-            });
-        }
-
-        res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลคอร์ส' });
-    }
-});
-
 // 3. GET: ดึงข้อมูลอาจารย์ทั้งหมดสำหรับ Dropdown (Teacher List)
 app.get('/api/teachers', async (req, res) => {
     try {
@@ -1839,6 +1792,82 @@ app.get('/api/search-courses', async (req, res) => {
             client.release();
         }
         res.status(500).json({ error: 'Internal server error during search', details: error.message });
+    }
+});
+
+
+app.get('/api/courses/:courseId', async (req, res) => {
+    const { courseId } = req.params;
+    const client = await pool.connect();
+
+    try {
+        const query = 'SELECT * FROM courses WHERE course_id = $1;';
+        const result = await client.query(query, [courseId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'ไม่พบคอร์สเรียนที่ต้องการ' });
+        }
+
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error("Error fetching course details:", error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการดึงข้อมูลคอร์สเรียน' });
+    } finally {
+        client.release();
+    }
+});
+
+
+app.put('/api/courses/:courseId', async (req, res) => {
+    const { courseId } = req.params;
+    const {
+        course_code,
+        course_name,
+        short_description,
+        description,
+        objective
+    } = req.body;
+
+    const client = await pool.connect();
+    try {
+        const updateQuery = `
+            UPDATE courses
+            SET 
+                course_code = $1,
+                course_name = $2,
+                short_description = $3,
+                description = $4,
+                objective = $5
+            WHERE 
+                course_id = $6
+            RETURNING *;
+        `;
+
+        const values = [
+            course_code,
+            course_name,
+            short_description,
+            description,
+            objective,
+            courseId
+        ];
+
+        const result = await client.query(updateQuery, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'ไม่พบคอร์สเรียนที่ต้องการแก้ไข' });
+        }
+
+        res.status(200).json({
+            message: 'อัปเดตข้อมูลคอร์สเรียนสำเร็จ',
+            course: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error updating course details:", error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการอัปเดตข้อมูลคอร์สเรียน' });
+    } finally {
+        client.release();
     }
 });
 

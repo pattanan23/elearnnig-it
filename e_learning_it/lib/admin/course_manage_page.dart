@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 // ตรวจสอบ path ของไฟล์เหล่านี้ให้ถูกต้องตามโครงสร้างโปรเจกต์ของคุณ
-import 'package:e_learning_it/admin/error_dialog_page.dart'; 
-import 'navbar_admin.dart'; 
-import 'drawer_admin.dart'; 
+import 'package:e_learning_it/admin/error_dialog_page.dart';
+import 'navbar_admin.dart';
+import 'drawer_admin.dart';
 
 // **NOTE:** แทนที่ด้วย Base URL ที่ถูกต้องของคุณ
-const String API_BASE_URL = 'http://localhost:3006/api'; 
+const String API_BASE_URL = 'http://localhost:3006/api';
 
 class CourseManagePage extends StatefulWidget {
   final String userName;
@@ -29,14 +29,39 @@ class _CourseManagePageState extends State<CourseManagePage> {
   // -----------------------------------------------------
   // STATE MANAGEMENT
   // -----------------------------------------------------
-  List<dynamic> _courses = [];
-  List<dynamic> _filteredCourses = []; 
+  List<dynamic> _courses = []; // ข้อมูลคอร์สทั้งหมดที่ดึงมาจาก API
+  List<dynamic> _filteredCourses = []; // ข้อมูลที่ถูกกรองและแสดงผล
   bool _isLoading = true;
+  // 💡 เพิ่ม State สำหรับการค้นหา
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _fetchData();
+  }
+
+  // -----------------------------------------------------
+  // FILTERING LOGIC
+  // -----------------------------------------------------
+
+  // 💡 เพิ่ม: ฟังก์ชันสำหรับกรองข้อมูลคอร์สตามค่าค้นหา
+  void _filterCourses() {
+    setState(() {
+      if (_searchQuery.isEmpty) {
+        _filteredCourses = _courses;
+        return;
+      }
+
+      final query = _searchQuery.toLowerCase();
+      _filteredCourses = _courses.where((course) {
+        final courseCode = course['course_code']?.toLowerCase() ?? '';
+        final courseName = course['course_name']?.toLowerCase() ?? '';
+
+        // ค้นหาจากรหัสวิชาหรือชื่อวิชา
+        return courseCode.contains(query) || courseName.contains(query);
+      }).toList();
+    });
   }
 
   // -----------------------------------------------------
@@ -54,16 +79,18 @@ class _CourseManagePageState extends State<CourseManagePage> {
 
       if (coursesResponse.statusCode == 200) {
         final List<dynamic> fetchedCourses = json.decode(coursesResponse.body);
-        
+
         // 💡 DEBUG: ตรวจสอบข้อมูลที่ได้รับจาก API เพื่อดูว่ามีคีย์ 'course_name' หรือไม่
-        print('Fetched Courses Data: ${json.encode(fetchedCourses)}'); 
-        
+        print('Fetched Courses Data: ${json.encode(fetchedCourses)}');
+
         setState(() {
           _courses = fetchedCourses;
-          _filteredCourses = fetchedCourses; 
+          // เรียกใช้การกรองทันทีหลังดึงข้อมูล (แม้ว่า Query จะว่างเปล่า)
+          _filterCourses();
         });
       } else {
-        throw Exception('Failed to load courses. Status Code: ${coursesResponse.statusCode}');
+        throw Exception(
+            'Failed to load courses. Status Code: ${coursesResponse.statusCode}');
       }
     } catch (e) {
       _showErrorDialog('การเชื่อมต่อล้มเหลว: ไม่สามารถดึงข้อมูลคอร์สได้: $e');
@@ -71,59 +98,6 @@ class _CourseManagePageState extends State<CourseManagePage> {
       setState(() {
         _isLoading = false;
       });
-    }
-  }
-
-  // -----------------------------------------------------
-  // API: UPDATE COURSE (PUT /api/courses-admin/:courseId)
-  // -----------------------------------------------------
-  Future<void> _updateCourse(
-    String courseId,
-    String newCourseCode,
-  ) async {
-    final url = Uri.parse('$API_BASE_URL/courses-admin/$courseId');
-    
-    final updateData = {
-      'course_code': newCourseCode,
-    };
-
-    try {
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(updateData),
-      );
-
-      if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('อัปเดตข้อมูลคอร์สสำเร็จ')),
-          );
-        }
-        _fetchData(); // รีเฟรชข้อมูลในตาราง
-      } else {
-        String errorMessage = 'การอัปเดตล้มเหลว: Status Code ${response.statusCode}';
-        
-        try {
-          if (response.body.isNotEmpty) {
-            final responseBody = json.decode(response.body);
-            errorMessage = 'การอัปเดตล้มเหลว: ${responseBody['message'] ?? errorMessage}';
-          }
-        } catch (e) {
-          errorMessage = 'การอัปเดตล้มเหลว: Status Code ${response.statusCode}. ' + 
-                          'โปรดตรวจสอบ Console Server: ${response.body.isNotEmpty ? response.body : 'ไม่มีข้อความตอบกลับ'}';
-        }
-
-        if (mounted) {
-          _showErrorDialog(errorMessage);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorDialog(
-          'การเชื่อมต่อล้มเหลว: ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: $e',
-        );
-      }
     }
   }
 
@@ -150,7 +124,9 @@ class _CourseManagePageState extends State<CourseManagePage> {
             // ส่วนหัว: คอร์สเรียน
             _buildHeader(),
             const SizedBox(height: 20),
-            
+            // 💡 เพิ่มช่องค้นหา
+            _buildSearchBar(),
+
             // ส่วนตารางข้อมูลและ Loading State (ขยายเต็มพื้นที่)
             Expanded(
               child: _buildBodyContent(),
@@ -160,7 +136,7 @@ class _CourseManagePageState extends State<CourseManagePage> {
       ),
     );
   }
-  
+
   // -----------------------------------------------------
   // UI COMPONENTS
   // -----------------------------------------------------
@@ -170,8 +146,8 @@ class _CourseManagePageState extends State<CourseManagePage> {
       children: [
         // 💡 Icon คอร์สเรียน
         Icon(
-          Icons.book, 
-          color: Color(0xFF4CAF50), 
+          Icons.book,
+          color: Color(0xFF4CAF50),
           size: 32,
         ),
         SizedBox(width: 10),
@@ -187,6 +163,33 @@ class _CourseManagePageState extends State<CourseManagePage> {
     );
   }
 
+  // 💡 เพิ่ม: ช่องค้นหา (Search Bar)
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'ค้นหาจากรหัสวิชา หรือชื่อวิชา...',
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0, horizontal: 15),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+            _filterCourses(); // 🎯 เรียกฟังก์ชันกรอง
+          });
+        },
+      ),
+    );
+  }
+
   // 🎯 FIX: เปลี่ยนโครงสร้างเพื่อรองรับ Horizontal Scrolling
   Widget _buildBodyContent() {
     if (_isLoading) {
@@ -199,7 +202,7 @@ class _CourseManagePageState extends State<CourseManagePage> {
             style: const TextStyle(fontSize: 16, color: Colors.grey)),
       );
     }
-    
+
     // 💡 Container สีขาวพร้อมเงาครอบตาราง
     return Container(
       decoration: BoxDecoration(
@@ -215,12 +218,14 @@ class _CourseManagePageState extends State<CourseManagePage> {
         ],
       ),
       // 🎯 FIX: ใช้ SingleChildScrollView ในแนวนอนเพื่อรองรับจอเล็ก
-      child: SingleChildScrollView( 
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal, // 👈 KEY: เลื่อนในแนวนอน
         child: ConstrainedBox(
           // 🎯 FIX: บังคับให้ตารางมีความกว้างอย่างน้อยเท่ากับพื้นที่หน้าจอทั้งหมด (หัก padding)
-          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40),
-          child: SingleChildScrollView( // เลื่อนในแนวตั้งสำหรับรายการในตาราง
+          constraints:
+              BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40),
+          child: SingleChildScrollView(
+            // เลื่อนในแนวตั้งสำหรับรายการในตาราง
             scrollDirection: Axis.vertical,
             child: _buildDataTable(),
           ),
@@ -228,112 +233,68 @@ class _CourseManagePageState extends State<CourseManagePage> {
       ),
     );
   }
-  
+
   // 🎯 การแสดงผล course_name ในตารางมีความถูกต้องแล้ว
   Widget _buildDataTable() {
     return DataTable(
-      columnSpacing: 12.0, 
-      dataRowMinHeight: 50, 
+      columnSpacing: 12.0,
+      dataRowMinHeight: 50,
       dataRowMaxHeight: 60,
       headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
       columns: [
         // 🎯 กำหนดความกว้างคงที่ (Fixed Width) แทน Expanded
-        DataColumn(label: Container(width: 100, alignment: Alignment.centerLeft, child: const Text('รหัสวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        DataColumn(label: Container(width: 300, alignment: Alignment.centerLeft, child: const Text('ชื่อวิชา', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        DataColumn(label: Container(width: 150, alignment: Alignment.centerLeft, child: const Text('ผู้สอน/ผู้สร้าง', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
-        // คอลัมน์แก้ไขข้อมูล ไม่ต้องกำหนดความกว้างมาก
-        const DataColumn(label: Text('แก้ไขข้อมูล', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
+        DataColumn(
+            label: Container(
+                width: 100,
+                alignment: Alignment.centerLeft,
+                child: const Text('รหัสวิชา',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(
+            label: Container(
+                width: 300,
+                alignment: Alignment.centerLeft,
+                child: const Text('ชื่อวิชา',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black)))),
+        DataColumn(
+            label: Container(
+                width: 150,
+                alignment: Alignment.centerLeft,
+                child: const Text('ผู้สอน/ผู้สร้าง',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black)))),
       ],
       rows: _filteredCourses.map<DataRow>((course) {
         final instructorName = course['instructor_name'] ?? '-';
-        final courseName = course['course_name'] ?? '-'; // 💡 course_name ถูกเรียกใช้ตรงนี้แล้ว
-        
+        final courseName = course['course_name'] ?? '-';
+
         return DataRow(
           cells: [
-            // 🎯 ใช้ SizedBox เพื่อกำหนดความกว้างของ Cell และจัดการ Overflow
-            DataCell(SizedBox(width: 100, child: Text(course['course_code'] ?? '-', overflow: TextOverflow.ellipsis))),
-            DataCell(SizedBox(width: 300, child: Text(courseName, overflow: TextOverflow.ellipsis))), // 💡 แสดงผล course_name
-            DataCell(SizedBox(width: 150, child: Text(instructorName, overflow: TextOverflow.ellipsis))),
-            DataCell(
-              Center( 
-                child: IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.redAccent), 
-                  onPressed: () => _showEditCourseDialog(course),
-                ),
-              ),
-            ),
+            // 1. รหัสวิชา
+            DataCell(SizedBox(
+                width: 100,
+                child: Text(course['course_code'] ?? '-',
+                    overflow: TextOverflow.ellipsis))),
+            // 2. ชื่อวิชา
+            DataCell(SizedBox(
+                width: 300,
+                child: Text(courseName, overflow: TextOverflow.ellipsis))),
+            // 3. ผู้สอน/ผู้สร้าง
+            DataCell(SizedBox(
+                width: 150,
+                child: Text(instructorName, overflow: TextOverflow.ellipsis))),
+      
           ],
         );
       }).toList(),
-    );
-  }
-  
-  void _showEditCourseDialog(Map<String, dynamic> course) {
-    final GlobalKey<FormState> _dialogFormKey = GlobalKey<FormState>();
-    final courseCodeController = TextEditingController(text: course['course_code'] ?? '');
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('แก้ไขรหัสวิชาของ ID: ${course['course_id']}'),
-          content: SingleChildScrollView(
-            child: Form( // เพิ่ม Form เพื่อการ Validation
-              key: _dialogFormKey,
-              child: ListBody(
-                children: <Widget>[
-                  // ชื่อวิชา (ไม่ให้แก้ไข) - course_name ถูกเรียกใช้ตรงนี้แล้ว
-                  Text('ชื่อวิชา: ${course['course_name'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold)), 
-                  const SizedBox(height: 10),
-
-                  // รหัสวิชา (Course Code)
-                  TextFormField(
-                    controller: courseCodeController,
-                    decoration: const InputDecoration(labelText: 'รหัสวิชา (Course Code)'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'กรุณากรอกรหัสวิชา';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('ยกเลิก'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
-              onPressed: () {
-                if (_dialogFormKey.currentState!.validate()) {
-                  _updateCourse(
-                    course['course_id'].toString(),
-                    courseCodeController.text, 
-                  );
-                  Navigator.of(context).pop();
-                } 
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
-      builder: (context) => ErrorDialogPage(message: message), 
+      builder: (context) => ErrorDialogPage(message: message),
     );
   }
 }

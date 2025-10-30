@@ -385,15 +385,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
-            // 🎯 ปุ่มแก้ไข
-            IconButton(
-              icon: const Icon(Icons.edit, size: 20, color: Colors.black54),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('แก้ไขวุฒิบัตร (Placeholder)')),
-                );
-              },
-            ),
+           
           ],
         ),
         const Divider(color: Colors.grey),

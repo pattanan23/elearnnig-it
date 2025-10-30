@@ -558,7 +558,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('วัตถุประสงค์ (ใส่เป็นข้อๆ)',
+        const Text('วัตถุประสงค์',
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextFormField(
@@ -578,7 +578,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                 borderRadius: BorderRadius.circular(8.0),
                 borderSide: const BorderSide(color: Colors.green, width: 2.0)),
             hintText:
-                'เช่น เรียนรู้พื้นฐานการเขียนโปรแกรม - สามารถสร้างแอปพลิเคชันง่ายๆ ได้',
+                'เช่น เรียนรู้พื้นฐานการเขียนโปรแกรม  สามารถสร้างแอปพลิเคชันง่ายๆ ',
           ),
           validator: (value) => value!.isEmpty ? 'กรุณาใส่วัตถุประสงค์' : null,
         ),
