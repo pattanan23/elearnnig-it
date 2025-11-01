@@ -58,14 +58,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 builder: (context) => AdminMainPage(userName: userName, userId: userId),
               ),
             );
-          } else if (userRole == 'นิสิต') {
+          } else if (userRole == 'นิสิต' || userRole == 'บุคคลภายนอก') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => MainPage(userName: userName, userId: userId),
               ),
             );
-          } else {
-            // กรณี role ไม่ตรงกับที่กำหนด
+          }
+        else {
+            // กรณี role ไม่ตรงกับที่กำหนด  
             showDialog(
               context: context,
               builder: (BuildContext context) {

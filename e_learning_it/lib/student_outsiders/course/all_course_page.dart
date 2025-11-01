@@ -99,8 +99,8 @@ class CourseAllPage extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 50.0),
                             child: Text(
                               title.contains('ผลการค้นหา')
-                                  ? 'ไม่พบหลักสูตรที่ตรงกับการค้นหา'
-                                  : 'ไม่พบข้อมูลหลักสูตร',
+                                  ? 'ไม่พบรายวิชาที่ตรงกับการค้นหา'
+                                  : 'ไม่พบข้อมูลรายวิชา',
                               style: const TextStyle(fontSize: 18, color: Colors.grey),
                               textAlign: TextAlign.center,
                             ),
@@ -163,7 +163,7 @@ class CourseAllPage extends StatelessWidget {
             );
           } else if (response.statusCode == 404) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('ไม่พบรายละเอียดหลักสูตร ID: ${course.courseId}')),
+                SnackBar(content: Text('ไม่พบรายละเอียดรายวิชา ID: ${course.courseId}')),
               );
           } else {
             throw Exception('Failed to load course details. Status: ${response.statusCode}');

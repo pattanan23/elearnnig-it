@@ -182,8 +182,8 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       // ไม่ต้อง Throw Exception หากแค่ไม่มีคอร์ส
     }
   }
-  
-  // ⚙️ API NEW: ดึงรายละเอียดหลักสูตรแบบเต็ม (GET /api/courses/:courseId)
+
+  // ⚙️ API NEW: ดึงรายละเอียดรายวิชาแบบเต็ม (GET /api/courses/:courseId)
   Future<FullCourseDetails> _fetchCourseDetails(String courseId) async {
     final url = Uri.parse('$BASE_URL/api/courses/$courseId'); 
     final response = await http.get(url);
@@ -194,11 +194,11 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       final detailsData = (data is List) ? data.first : data;
       return FullCourseDetails.fromJson(detailsData);
     } else {
-      throw Exception('ไม่สามารถดึงรายละเอียดหลักสูตรได้ (Status: ${response.statusCode})');
+      throw Exception('ไม่สามารถดึงรายละเอียดรายวิชาได้ (Status: ${response.statusCode})');
     }
   }
-  
-  // ⚙️ API NEW: อัปเดตข้อมูลหลักสูตรผ่าน API (PUT /api/courses/:courseId)
+
+  // ⚙️ API NEW: อัปเดตข้อมูลรายวิชาผ่าน API (PUT /api/courses/:courseId)
   Future<void> _updateCourseDetails(FullCourseDetails course) async {
     final url = Uri.parse('$BASE_URL/api/courses/${course.courseId}'); 
     final response = await http.put(
@@ -217,11 +217,11 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('ไม่สามารถอัปเดตหลักสูตรได้ (Status: ${response.statusCode}, Error: ${response.body})');
+      throw Exception('ไม่สามารถอัปเดตรายวิชาได้ (Status: ${response.statusCode}, Error: ${response.body})');
     }
-    
-    // เมื่ออัปเดตสำเร็จ ให้โหลดข้อมูลทั้งหมดใหม่ เพื่อให้รายการหลักสูตรอัปเดตบนหน้าจอ
-    await _fetchData(); 
+
+    // เมื่ออัปเดตสำเร็จ ให้โหลดข้อมูลทั้งหมดใหม่ เพื่อให้รายการรายวิชาอัปเดตบนหน้าจอ
+    await _fetchData();
   }
 
 
@@ -256,7 +256,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
         context: context,
         builder: (BuildContext dialogContext) {
           return AlertDialog(
-            title: Text('แก้ไขหลักสูตร: ${course.courseCode}'),
+            title: Text('แก้ไขรายวิชา: ${course.courseCode}'),
             content: SingleChildScrollView(
               child: Form(
                 key: formKey,
@@ -266,7 +266,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                     _buildTextField(codeController, 'รหัสวิชา (course_code)', isRequired: true),
                     _buildTextField(nameController, 'ชื่อวิชา (course_name)', isRequired: true),
                     _buildTextField(shortDescController, 'คำอธิบายสั้น ๆ (short_description)', maxLines: 2),
-                    _buildTextField(descController, 'รายละเอียดหลักสูตร (description)', maxLines: 3),
+                    _buildTextField(descController, 'รายละเอียดรายวิชา (description)', maxLines: 3),
                     _buildTextField(objectiveController, 'วัตถุประสงค์ (objective)', maxLines: 3),
                   ],
                 ),
@@ -313,7 +313,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                       Navigator.of(context).pop(); 
                       
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('อัปเดตหลักสูตรสำเร็จ!')),
+                        const SnackBar(content: Text('อัปเดตรายวิชาสำเร็จ!')),
                       );
                     } catch (e) {
                       // ปิด Loading indicator หากมี
@@ -333,13 +333,13 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
       );
 
     } catch (e) {
-      // กรณีดึงรายละเอียดหลักสูตรล้มเหลว (เช่น 404 Not Found)
+      // กรณีดึงรายละเอียดรายวิชาล้มเหลว (เช่น 404 Not Found)
       // ปิด Loading Dialog ที่เปิดไว้ตอนแรก
       if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop(); 
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ไม่สามารถโหลดรายละเอียดหลักสูตร: ${e.toString()}')),
+        SnackBar(content: Text('ไม่สามารถโหลดรายละเอียดรายวิชา: ${e.toString()}')),
       );
     }
   }
@@ -514,10 +514,10 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
   }
 
 
-  // Card 2: Professor Courses (หลักสูตรของฉัน)
+  // Card 2: Professor Courses (รายวิชาของฉัน)
   Widget _buildProfessorCoursesCard(BuildContext context) {
-    // แสดงหลักสูตรสูงสุด 4 รายการ
-    final List<ProfessorCourse> coursesToShow = _professorCourses.take(4).toList(); 
+    // แสดงรายวิชาสูงสุด 4 รายการ
+    final List<ProfessorCourse> coursesToShow = _professorCourses.take(4).toList();
 
     return Card(
       elevation: 0, 
@@ -538,7 +538,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                     const Icon(Icons.menu_book, size: 20, color: Colors.green),
                     const SizedBox(width: 8),
                     const Text(
-                      'หลักสูตรของฉัน', 
+                      'รายวิชาของฉัน',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -552,7 +552,7 @@ class _ProfessorProfilePageState extends State<ProfessorProfilePage> {
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.all(40.0),
-                      child: Text('อาจารย์ยังไม่ได้สร้างหลักสูตรใด ๆ'),
+                      child: Text('อาจารย์ยังไม่ได้สร้างรายวิชาใด ๆ'),
                     ),
                   )
                 : LayoutBuilder( // 🎯 FIX: ใช้ LayoutBuilder เพื่อให้ GridView Responsive (ป้องกัน Right Overflow)

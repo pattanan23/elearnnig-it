@@ -10,8 +10,8 @@ import 'package:url_launcher/url_launcher.dart';
 // ----------------------------------------------------------------------
 class CertificateData {
   final String userName;
-  final String subjectName; // ชื่อหลักสูตรย่อย
-  final String courseName; // ชื่อหลักสูตรหลัก
+  final String subjectName; // ชื่อรายวิชาย่อย
+  final String courseName; // ชื่อรายวิชาหลัก
   final String issueDate; // วันที่ออกวุฒิบัตร (ยังคงเก็บไว้สำหรับ PDF)
 
   CertificateData({
@@ -27,9 +27,9 @@ class CertificateData {
     final String fullName = '${json['firstName'] ?? ''} ${json['lastName'] ?? ''}'.trim();
     return CertificateData(
       userName: fullName,
-      subjectName: json['subjectName'] ?? 'ไม่ระบุหลักสูตรย่อย', 
-      courseName: json['courseName'] ?? 'ไม่ระบุหลักสูตรหลัก',
-      issueDate: json['issueDate'] ?? '', 
+      subjectName: json['subjectName'] ?? 'ไม่ระบุรายวิชาย่อย',
+      courseName: json['courseName'] ?? 'ไม่ระบุรายวิชาหลัก',
+      issueDate: json['issueDate'] ?? '',
     );
   }
 }
@@ -303,15 +303,15 @@ class _CertificatePageState extends State<CertificatePage> {
                       ),
                       const SizedBox(height: 10),
 
-                      // ข้อความจบหลักสูตร
+                      // ข้อความจบรายวิชา
                       Text(
-                        'ได้ผ่านการอบรมและประเมินผลหลักสูตร',
+                        'ได้ผ่านการอบรมรายวิชา',
                         style: TextStyle(fontSize: bodyTextSize, color: Colors.black54), // 🎯 ใช้ bodyTextSize
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 10),
 
-                      // ชื่อหลักสูตร
+                      // ชื่อรายวิชา
                       Text(
                         _certData!.courseName,
                         style: TextStyle(
@@ -322,7 +322,7 @@ class _CertificatePageState extends State<CertificatePage> {
                       ),
                       const SizedBox(height: 5),
 
-                      // ชื่อหลักสูตรย่อย
+                      // ชื่อรายวิชาย่อย
                       Text(
                         '(${_certData!.subjectName})',
                         style: TextStyle(fontSize: subjectNameSize, color: primaryColor), // 🎯 ใช้ subjectNameSize
@@ -330,7 +330,7 @@ class _CertificatePageState extends State<CertificatePage> {
                       ),
                       const SizedBox(height: 70), // เว้นช่องว่าง
                       
-                      // 📝 (ส่วนลายเซ็น/ผู้บริหารหลักสูตร - สามารถเพิ่มได้ที่นี่)
+                      // 📝 (ส่วนลายเซ็น/ผู้บริหาร - สามารถเพิ่มได้ที่นี่)
 
                     ],
                   ),

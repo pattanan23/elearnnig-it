@@ -92,7 +92,7 @@ class DrawerAdminPage extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.school),
-              title: const Text('หลักสูตรการเรียน'),
+              title: const Text('รายวิชาการเรียน'),
               iconColor: Colors.white,
               onTap: () {
                 Navigator.pop(context);

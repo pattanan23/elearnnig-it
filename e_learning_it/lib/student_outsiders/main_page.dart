@@ -103,7 +103,7 @@ class MainPage extends StatelessWidget {
                           } else if (!snapshot.hasData ||
                               snapshot.data!.isEmpty) {
                             return const Center(
-                                child: Text('ไม่พบข้อมูลหลักสูตร'));
+                                child: Text('ไม่พบข้อมูลรายวิชา'));
                           } else {
                             return GridView.builder(
                               shrinkWrap: true,
@@ -161,7 +161,7 @@ class MainPage extends StatelessWidget {
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content: Text('ไม่สามารถดึงข้อมูลรายละเอียดหลักสูตรได้')),
+                  content: Text('ไม่สามารถดึงข้อมูลรายละเอียดรายวิชาได้')),
             );
           }
         } catch (e) {

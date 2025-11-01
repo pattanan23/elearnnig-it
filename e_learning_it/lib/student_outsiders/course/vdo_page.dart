@@ -502,7 +502,7 @@ class _VdoPageState extends State<VdoPage> {
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 800) {
+            if (constraints.maxWidth < 1100) {
               return SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,7 +527,7 @@ class _VdoPageState extends State<VdoPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 3,
+                  flex: 5,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

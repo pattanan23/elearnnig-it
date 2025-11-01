@@ -89,6 +89,38 @@ async function sendOTPEmail(toEmail, otpCode) {
     }
 }
 
+async function sendOTPEmail(toEmail, otpCode, subject, purposeText) { // รับ subject และ purposeText เพิ่ม
+    try {
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: toEmail,
+            subject: subject, // ใช้ Subject ที่ถูกส่งเข้ามา
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <h2 style="color: #4CAF50;">${subject}</h2>
+                    <p>เรียนผู้ใช้งาน,</p>
+                    <p>นี่คือรหัสยืนยัน (OTP) 3 หลักสำหรับการ<strong>${purposeText}</strong>ของคุณ:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <span style="font-size: 32px; font-weight: bold; color: #333; background-color: #f0f0f0; padding: 10px 20px; border-radius: 5px; letter-spacing: 5px;">
+                            ${otpCode}
+                        </span>
+                    </div>
+                    <p>รหัสนี้จะหมดอายุภายใน 10 นาที หากคุณไม่ได้ร้องขอ ${purposeText} นี้ โปรดเพิกเฉยต่ออีเมลฉบับนี้</p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 12px; color: #888;">E-Learning IT Team</p>
+                </div>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email sent: ' + info.response);
+        return true;
+    } catch (error) {
+        console.error("Error sending email:", error);
+        return false;
+    }
+}
+
 
 // Endpoint สำหรับเข้าสู่ระบบ
 app.post('/api/login', async (req, res) => {
@@ -188,16 +220,117 @@ app.post('/api/login-admin', async (req, res) => {
     }
 });
 
-// Endpoint สำหรับสร้างผู้ใช้ใหม่
 app.post('/api/users', async (req, res) => {
     const { first_name, last_name, email, password, role, student_id } = req.body;
+    
+    // --- Validation and Hashing (Same as before) ---
     try {
+        // 1. Check for existing user in final table
+        const checkExistsQuery = `
+            SELECT email FROM users
+            WHERE email = $1 OR (student_id IS NOT NULL AND student_id = $2);
+        `;
+        const checkExistsResult = await pool.query(checkExistsQuery, [email, student_id]);
+
+        if (checkExistsResult.rows.length > 0) {
+            return res.status(409).json({ error: "อีเมลหรือรหัสนิสิตนี้มีผู้ใช้งานแล้ว" });
+        }
+        
         const saltRounds = 10;
         const password_hash = await bcrypt.hash(password, saltRounds);
+        const otpCode = generateOTP(); // ใช้ 5-digit OTP
+        const expirationTime = new Date(Date.now() + 10 * 60 * 1000); // 10 นาที
+
+        // 2. Send OTP Email
+        const registrationSubject = "รหัสยืนยันสำหรับการสมัครสมาชิก"; // <<-- หัวข้อที่ถูกต้อง
+        const registrationPurpose = "ยืนยันการสมัครสมาชิก"; // <<-- วัตถุประสงค์ที่ถูกต้อง
+        
+        // ส่งหัวข้อและวัตถุประสงค์ใหม่
+        const emailSent = await sendOTPEmail(email, otpCode, registrationSubject, registrationPurpose);
+        
+        if (!emailSent) {
+            return res.status(500).json({ error: "ไม่สามารถส่งรหัส OTP ได้ กรุณาตรวจสอบอีเมล" });
+        }
+        
+        // 3. Save pending registration data and OTP to a temporary store (ใช้ตาราง pending_registrations)
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN'); // Start transaction
+            
+            // ลบข้อมูลเก่าที่ค้างอยู่ของอีเมลนี้
+            await client.query('DELETE FROM pending_registrations WHERE email = $1', [email]);
+            
+            // Store all registration data (including hashed password)
+            const registrationData = { first_name, last_name, password_hash, role, student_id, created_at: new Date().toISOString() };
+            
+            // **โปรดตรวจสอบว่าคุณได้สร้างตาราง pending_registrations ใน PostgreSQL แล้ว**
+            const insertPendingQuery = `
+                INSERT INTO pending_registrations (email, otp_code, registration_data, expires_at)
+                VALUES ($1, $2, $3, $4)
+                RETURNING *;
+            `;
+            const insertValues = [email, otpCode, JSON.stringify(registrationData), expirationTime.toISOString()];
+            await client.query(insertPendingQuery, insertValues);
+
+            await client.query('COMMIT');
+            
+            // 4. Return success to frontend, asking for OTP
+            return res.status(200).json({
+                message: "รหัส OTP ถูกส่งไปที่อีเมลของคุณแล้ว กรุณาตรวจสอบและกรอกรหัสเพื่อยืนยันการสมัครสมาชิก",
+                email: email, // ส่ง email กลับไปเพื่อให้ frontend ใช้ในการ verify
+            });
+            
+        } catch (dbError) {
+            await client.query('ROLLBACK');
+            console.error("Error storing pending registration:", dbError);
+            return res.status(500).json({ error: "เกิดข้อผิดพลาดในการบันทึกข้อมูลรอการยืนยัน" });
+        } finally {
+            client.release();
+        }
+
+    } catch (error) {
+        console.error("Error requesting registration OTP:", error);
+        if (error.code === '23505') { 
+             return res.status(409).json({ error: "อีเมลหรือรหัสนิสิตนี้มีผู้ใช้งานแล้ว" });
+        }
+        return res.status(500).json({ error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" });
+    }
+});
+
+// URL: /api/register/verify_otp
+app.post('/api/register/verify_otp', async (req, res) => {
+    const { email, otp_code } = req.body;
+    
+    if (!email || !otp_code) {
+        return res.status(400).json({ message: 'Missing email or OTP code.' });
+    }
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Start transaction
+
+        // 1. Check OTP and get pending data
+        // ตรวจสอบทั้ง OTP, email และเวลาหมดอายุ
+        const checkOtpQuery = `
+            SELECT registration_data FROM pending_registrations 
+            WHERE email = $1 AND otp_code = $2 AND expires_at > NOW();
+        `;
+        const otpResult = await client.query(checkOtpQuery, [email, otp_code]);
+
+        if (otpResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(401).json({ message: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว' });
+        }
+
+        // ✅ แก้ไข: ลบ JSON.parse() ออก เพราะข้อมูล JSONB ถูกแปลงเป็น Object ให้แล้ว
+        const pendingData = otpResult.rows[0].registration_data;
+        const { first_name, last_name, password_hash, role, student_id } = pendingData;
+        
+        // 2. Insert final user record into 'users' table
         const insertUserQuery = `
             INSERT INTO users (first_name, last_name, email, password_hash, role, student_id, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, NOW())
-            RETURNING user_id, first_name, last_name, email, role, student_id, created_at;
+            RETURNING user_id, first_name, last_name, email, role, student_id;
         `;
         const values = [
             first_name,
@@ -207,24 +340,32 @@ app.post('/api/users', async (req, res) => {
             role,
             student_id,
         ];
-        const result = await pool.query(insertUserQuery, values);
+        const result = await client.query(insertUserQuery, values);
         const newUser = result.rows[0];
+
+        // 3. Delete the temporary record
+        await client.query('DELETE FROM pending_registrations WHERE email = $1', [email]);
+        
+        await client.query('COMMIT');
+        
         return res.status(201).json({
-            message: "User created successfully",
+            message: "ยืนยันการสมัครสมาชิกสำเร็จ",
             user: newUser
         });
+
     } catch (error) {
-        console.error("Error creating user:", error);
-        if (error.code === '23505') {
-            if (error.constraint === 'users_email_key') {
-                return res.status(409).json({ error: "อีเมลนี้มีผู้ใช้งานแล้ว" });
-            } else if (error.constraint === 'users_student_id_key') {
-                return res.status(409).json({ error: `รหัสนิสิต '${student_id}' มีผู้ใช้งานแล้ว` });
-            }
+        await client.query('ROLLBACK');
+        console.error("Error verifying OTP and creating user:", error);
+        if (error.code === '23505') { 
+            return res.status(409).json({ error: "อีเมลหรือรหัสนิสิตนี้มีผู้ใช้งานแล้ว (เกิดปัญหาซ้ำซ้อน)" });
         }
         return res.status(500).json({ error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" });
+    } finally {
+        client.release();
     }
 });
+
+
 // ใช้ multer.memoryStorage() สำหรับการเก็บไฟล์ใน RAM ชั่วคราว
 const upload = multer({ storage: multer.memoryStorage() });
 

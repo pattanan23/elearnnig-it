@@ -69,7 +69,7 @@ class MainProfessorPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'หลักสูตรแนะนำ',
+                'รายวิชาแนะนำ',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
@@ -95,7 +95,7 @@ class MainProfessorPage extends StatelessWidget {
                           } else if (snapshot.hasError) {
                             return Center(child: Text('Error: ${snapshot.error}'));
                           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Center(child: Text('ไม่พบข้อมูลหลักสูตร'));
+                            return const Center(child: Text('ไม่พบข้อมูลรายวิชา'));
                           } else {
                             return GridView.builder(
                               shrinkWrap: true,
@@ -147,7 +147,7 @@ class MainProfessorPage extends StatelessWidget {
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('ไม่สามารถดึงข้อมูลรายละเอียดหลักสูตรได้')),
+              const SnackBar(content: Text('ไม่สามารถดึงข้อมูลรายละเอียดรายวิชาได้')),
             );
           }
         } catch (e) {

@@ -95,7 +95,7 @@ class _ResetPasswordVerifyScreenState extends State<ResetPasswordVerifyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('ตั้งรหัสผ่านใหม่'),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF03A96B),
         foregroundColor: Colors.white,
       ),
       body: Center(

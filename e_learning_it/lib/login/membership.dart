@@ -7,13 +7,32 @@ import '../student_outsiders/main_page.dart';
 import '../error_dialog_page.dart';
 import '../professor/main_professor_page.dart'; // import ไฟล์ main_professor_page.dart
 
-Future<http.Response> createUser(Map<String, dynamic> userData) async {
+// 1. เปลี่ยนชื่อฟังก์ชันจาก createUser เป็น requestRegistrationOTP และเปลี่ยน Logic 
+//    (ใน Backend เดิมคือสร้างผู้ใช้ แต่ตอนนี้คือขอ OTP และบันทึกข้อมูลชั่วคราว)
+Future<http.Response> requestRegistrationOTP(Map<String, dynamic> userData) async {
+  // ใช้ endpoint เดิม /api/users ซึ่งตอนนี้ถูกเปลี่ยน Logic ใน backend ให้ส่ง OTP
   final url = Uri.parse('http://localhost:3006/api/users');
   try {
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(userData),
+    );
+    return response;
+  } catch (e) {
+    throw Exception('Error during API call: $e');
+  }
+}
+
+// 2. ฟังก์ชันใหม่สำหรับยืนยัน OTP กับ Backend
+Future<http.Response> verifyRegistrationOTP(String email, String otpCode) async {
+  // ใช้ endpoint ใหม่สำหรับการยืนยัน OTP
+  final url = Uri.parse('http://localhost:3006/api/register/verify_otp');
+  try {
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'otp_code': otpCode}),
     );
     return response;
   } catch (e) {
@@ -35,6 +54,7 @@ class _MemberScreenState extends State<MemberScreen> {
   final TextEditingController confirmPasswordController = TextEditingController();
   final TextEditingController studentIDController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController otpController = TextEditingController(); // <<<< Controller สำหรับ OTP
 
   String? selectedRole;
   final List<String> _roles = ['อาจารย์', 'นิสิต', 'บุคคลภายนอก'];
@@ -46,6 +66,150 @@ class _MemberScreenState extends State<MemberScreen> {
       context: context,
       builder: (BuildContext context) {
         return ErrorDialogPage(message: message);
+      },
+    );
+  }
+
+  // 3. ฟังก์ชันแสดงป๊อปอัปสำหรับกรอกรหัส OTP (ปรับปรุงให้สวยงามขึ้น)
+  void _showOTPVerificationDialog(String email) {
+    otpController.clear();
+    showDialog(
+      context: context,
+      barrierDismissible: false, // ป้องกันการปิด Pop-up โดยการแตะภายนอก
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), // ขอบโค้ง
+          title: Row(
+            children: <Widget>[
+              const Icon(Icons.vpn_key_rounded, color: Color(0xFF03A96B), size: 28), // เพิ่มไอคอน
+              const SizedBox(width: 10),
+              const Text('ยืนยันรหัส OTP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                const Text(
+                  'กรุณากรอกรหัส 5 หลักที่ถูกส่งไปที่อีเมลของคุณ',
+                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                const SizedBox(height: 25),
+                TextFormField(
+                  controller: otpController,
+                  decoration: InputDecoration(
+                    labelText: 'OTP',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF03A96B)), // เน้นขอบสีเขียว
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF03A96B)
+                      , width: 2), // เน้นเมื่อโฟกัส
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  ),
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 8, // เว้นระยะห่างระหว่างตัวเลข
+                      color: Color(0xFF03A96B), // สีตัวเลข
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(5), // สมมติว่าเป็น OTP 5 หลัก
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('ยกเลิก', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              // ปรับสีปุ่มให้สอดคล้องกับธีม
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF03A96B),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('ยืนยัน', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                if (otpController.text.length != 5) {
+                  _showErrorDialog(context, 'กรุณากรอกรหัส OTP ให้ครบ 5 หลัก');
+                  return;
+                }
+
+                // ปิดป๊อปอัป OTP ก่อน
+                Navigator.of(context).pop();
+
+                try {
+                  final response = await verifyRegistrationOTP(email, otpController.text);
+
+                  if (response.statusCode == 201) {
+                    final responseBody = jsonDecode(response.body);
+                    final user = responseBody['user'];
+                    final userName = '${user['first_name']} ${user['last_name']}';
+                    final userId = user['user_id'].toString();
+                    final role = user['role'];
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('สมัครสมาชิกสำเร็จ!')),
+                    );
+
+                    // นำทางไปยังหน้าหลักตามบทบาท
+                    if (role == 'อาจารย์') {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => MainProfessorPage(
+                              userName: userName, userId: userId),
+                        ),
+                      );
+                    } else { // นิสิต หรือ บุคคลภายนอก
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => MainPage(
+                              userName: userName, userId: userId),
+                        ),
+                      );
+                    }
+                  } else {
+                    final errorBody = jsonDecode(response.body);
+                    final errorMessage = errorBody['message'] ?? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว';
+
+                    // ใช้ showDialog().then() เพื่อรอให้ Error Dialog ปิดก่อน
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return ErrorDialogPage(message: errorMessage);
+                      },
+                    ).then((_) {
+                      // เปิด Pop-up OTP อีกครั้งหลังจากผู้ใช้กด 'ตกลง' ใน Error Dialog
+                      _showOTPVerificationDialog(email);
+                    });
+                  }
+                } catch (e) {
+                  // ใช้ showDialog().then() เพื่อรอให้ Error Dialog ปิดก่อน
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return ErrorDialogPage(message: 'เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อยืนยัน OTP: $e');
+                    },
+                  ).then((_) {
+                    // เปิด Pop-up OTP อีกครั้งหลังจากผู้ใช้กด 'ตกลง' ใน Error Dialog
+                    _showOTPVerificationDialog(email);
+                  });
+                }
+              },
+            ),
+          ],
+        );
       },
     );
   }
@@ -261,43 +425,25 @@ class _MemberScreenState extends State<MemberScreen> {
                   };
 
                   try {
-                    final response = await createUser(userData);
+                    // 4. เรียกใช้ requestRegistrationOTP
+                    final response = await requestRegistrationOTP(userData);
 
-                    if (response.statusCode == 201) {
-                      final responseData = jsonDecode(response.body);
-                      final newUser = responseData['user'];
-                      final firstName = newUser['first_name'] ?? '';
-                      final lastName = newUser['last_name'] ?? '';
-                      final userName = '$firstName $lastName'.trim();
+                    if (response.statusCode == 200) {
+                      // สถานะ 200 หมายถึง Backend ส่ง OTP สำเร็จ
+                      final responseBody = jsonDecode(response.body);
+                      final emailForVerification = responseBody['email'];
                       
-                      // 🎯 การแก้ไข: แปลง userId จาก int เป็น String
-                      final userId = newUser['user_id'].toString();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('สมัครสมาชิกสำเร็จ!')),
-                      );
-
-                      if (selectedRole == 'อาจารย์') {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (context) => MainProfessorPage(
-                                userName: userName, userId: userId),
-                          ),
-                        );
-                      } else if (selectedRole == 'นิสิต' ||
-                          selectedRole == 'บุคคลภายนอก') {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (context) => MainPage(
-                                userName: userName, userId: userId),
-                          ),
-                        );
-                      }
+                      // **🎯 การแก้ไข**: ลบ _showErrorDialog ที่รบกวน Pop-up OTP ออก
+                      // _showErrorDialog(context, responseBody['message']); // ลบออก
+                      
+                      _showOTPVerificationDialog(emailForVerification); // แสดงป๊อปอัป OTP ทันที
+                      
                     } else if (response.statusCode == 409) {
                       final errorBody = jsonDecode(response.body);
                       _showErrorDialog(context, errorBody['error']);
                     } else {
-                      _showErrorDialog(context, 'เกิดข้อผิดพลาดในการสมัคร: ${response.statusCode}');
+                      final errorBody = jsonDecode(response.body);
+                      _showErrorDialog(context, errorBody['error'] ?? 'เกิดข้อผิดพลาดในการสมัคร: ${response.statusCode}');
                     }
                   } catch (e) {
                     _showErrorDialog(context, 'เกิดข้อผิดพลาดในการเชื่อมต่อ: $e');
@@ -310,7 +456,7 @@ class _MemberScreenState extends State<MemberScreen> {
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.green,
                 shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: Colors.green),
+                  side: const BorderSide(color: Colors.green, width: 2),
                   borderRadius: BorderRadius.circular(5),
                 ),
                 elevation: 2,
@@ -334,6 +480,7 @@ class _MemberScreenState extends State<MemberScreen> {
     passwordController.dispose();
     confirmPasswordController.dispose();
     studentIDController.dispose();
+    otpController.dispose(); // <<<< Dispose controller
     super.dispose();
   }
 }

@@ -86,7 +86,7 @@ class _ResetPasswordRequestScreenState extends State<ResetPasswordRequestScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('ร้องขอรีเซ็ตรหัสผ่าน'),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF03A96B),
         foregroundColor: Colors.white,
       ),
       body: Center(
@@ -137,7 +137,7 @@ class _ResetPasswordRequestScreenState extends State<ResetPasswordRequestScreen>
                   ElevatedButton(
                     onPressed: _isLoading ? null : _requestPasswordReset,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: const Color(0xFF03A96B),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(

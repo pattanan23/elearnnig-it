@@ -446,7 +446,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with SingleTickerPr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ... (ส่วนหัวหลักสูตรและรูปภาพ) ...
+                
                 Container(
                   height: 200,
                   width: double.infinity,
@@ -621,7 +621,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with SingleTickerPr
             children: [
               const Icon(Icons.menu_book, color: Color.fromARGB(255, 87, 87, 87)),
               const SizedBox(width: 8),
-              Text('คำอธิบายหลักสูตร', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              Text('คำอธิบายรายวิชา', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 8),

@@ -127,7 +127,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   }
 
   Future<void> _fetchProfessorCourses() async {
-    // เรียก API ที่กรองตาม userId เพื่อดึงเฉพาะหลักสูตรที่ผู้ใช้นี้สร้าง
+    // เรียก API ที่กรองตาม userId เพื่อดึงเฉพาะรายวิชาที่ผู้ใช้นี้สร้าง
     final url = Uri.parse('$BASE_URL/api/professor/courses/${widget.userId}');
     final response = await http.get(url);
 
@@ -314,7 +314,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         onTap: () {
           // 💡 Placeholder: ต้องเปลี่ยนไปหน้า CourseProfessorDetailPage
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('กำลังเปิดดูรายละเอียดหลักสูตร ${course.courseName}')),
+            SnackBar(content: Text('กำลังเปิดดูรายละเอียดรายวิชา ${course.courseName}')),
           );
         },
         child: Column(

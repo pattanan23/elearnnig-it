@@ -104,7 +104,7 @@ class CourseDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-         title: const Text('รายละเอียดหลักสูตร', style: TextStyle(color: Colors.white)),
+         title: const Text('รายละเอียดรายวิชา', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF03A96B),
         iconTheme: const IconThemeData(color: Colors.white), 
       ),
@@ -112,7 +112,7 @@ class CourseDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ส่วนหัวหลักสูตร
+            // ส่วนหัวรายวิชา
             Container(
               height: 200,
               width: double.infinity,
@@ -165,7 +165,7 @@ class CourseDetailPage extends StatelessWidget {
             unselectedLabelColor: Colors.black54,
             tabs: [
               Tab(
-                  child: Text('รายละเอียดหลักสูตร',
+                  child: Text('รายละเอียดรายวิชา',
                       overflow: TextOverflow.ellipsis)),
               Tab(child: Text('วิดีโอ', overflow: TextOverflow.ellipsis)),
               Tab(
@@ -178,7 +178,7 @@ class CourseDetailPage extends StatelessWidget {
             height: 600, // สามารถปรับความสูงตามความเหมาะสม
             child: TabBarView(
               children: [
-                // Tab 1: รายละเอียดหลักสูตร
+                // Tab 1: รายละเอียดรายวิชา
                 _buildDetailsTab(),
 
                 // Tab 2: วิดีโอ (Tab ใหม่)
@@ -259,7 +259,7 @@ class CourseDetailPage extends StatelessWidget {
   Widget _buildVideoLessonsTab(BuildContext context) {
     if (course.lessons.isEmpty) {
       return const Center(
-          child: Text('ไม่พบวิดีโอการเรียนการสอนสำหรับหลักสูตรนี้'));
+          child: Text('ไม่พบวิดีโอการเรียนการสอนสำหรับรายวิชานี้'));
     }
 
     return ListView.builder(
@@ -305,7 +305,7 @@ class CourseDetailPage extends StatelessWidget {
 
     if (filesWithPdf.isEmpty) {
       return const Center(
-          child: Text('ไม่พบเอกสารประกอบการเรียนสำหรับหลักสูตรนี้'));
+          child: Text('ไม่พบเอกสารประกอบการเรียนสำหรับรายวิชานี้'));
     }
 
     return ListView.builder(

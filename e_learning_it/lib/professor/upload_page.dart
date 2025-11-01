@@ -153,7 +153,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
   Future<void> _submitCourseDetails() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedImagePlatformFile == null) {
-        _showErrorDialog('กรุณาเลือกไฟล์รูปภาพหลักสูตร');
+        _showErrorDialog('กรุณาเลือกไฟล์รูปภาพรายวิชา');
         return;
       }
 
@@ -197,7 +197,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
             _courseId = responseData['course_id'].toString();
           });
           _showSuccessDialog('บันทึกสำเร็จ',
-              'บันทึกข้อมูลหลักสูตรสำเร็จแล้ว! กรุณาอัปโหลดวิดีโอในส่วนถัดไป');
+              'บันทึกข้อมูลรายวิชาสำเร็จแล้ว! กรุณาอัปโหลดวิดีโอในส่วนถัดไป');
         } else {
           final responseData = json.decode(response.body);
           final errorMessage = responseData['message'] ?? 'ไม่ทราบข้อผิดพลาด';
@@ -217,7 +217,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
 
   Future<void> _uploadVideoLesson(int index) async {
     if (_courseId == null) {
-      _showErrorDialog('กรุณาบันทึกข้อมูลหลักสูตรก่อน');
+      _showErrorDialog('กรุณาบันทึกข้อมูลรายวิชาก่อน');
       return;
     }
 
@@ -295,7 +295,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
 
   void _onFinishUpload() {
     if (_courseId == null) {
-      _showErrorDialog('กรุณาบันทึกข้อมูลหลักสูตรก่อน');
+      _showErrorDialog('กรุณาบันทึกข้อมูลรายวิชาก่อน');
       return;
     }
 
@@ -315,7 +315,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
           return AlertDialog(
             title: const Text('อัปโหลดสำเร็จทั้งหมด'),
             content: const Text(
-                'หลักสูตรของคุณถูกสร้างและอัปโหลดวิดีโอสำเร็จเรียบร้อยแล้ว'),
+                'รายวิชาของคุณถูกสร้างและอัปโหลดวิดีโอสำเร็จเรียบร้อยแล้ว'),
             actions: <Widget>[
               TextButton(
                 child: const Text('ตกลง'),
@@ -366,7 +366,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                     Icon(Icons.upload_file, size: 48, color: Colors.green[700]),
                     const SizedBox(width: 8),
                     const Text(
-                      'อัปโหลดหลักสูตรใหม่',
+                      'อัปโหลดรายวิชาใหม่',
                       style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -376,7 +376,7 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                 ),
                 const SizedBox(height: 20),
                 _buildSectionCard(
-                  title: '1. เนื้อหาหลักสูตร',
+                  title: '1. เนื้อหารายวิชา',
                   children: [
                     _buildTextField(
                         controller: _courseCodeController,
@@ -399,9 +399,9 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                     const SizedBox(height: 16),
                     _buildTextField(
                         controller: _descriptionController,
-                        label: 'คำอธิบายหลักสูตร',
+                        label: 'คำอธิบายรายวิชา',
                         validator: (value) =>
-                            value!.isEmpty ? 'กรุณาใส่คำอธิบายหลักสูตร' : null),
+                            value!.isEmpty ? 'กรุณาใส่คำอธิบายรายวิชา' : null),
                     const SizedBox(height: 16),
                     _buildObjectiveTextField(),
                     const SizedBox(height: 24),
@@ -428,14 +428,14 @@ class _UploadCoursePageState extends State<UploadCoursePage> {
                                   valueColor: AlwaysStoppedAnimation<Color>(
                                       Colors.white),
                                   strokeWidth: 2))
-                          : const Text('บันทึกรายละเอียดหลักสูตร',
+                          : const Text('บันทึกรายละเอียดรายวิชา',
                               style: TextStyle(fontSize: 18)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
                 _buildSectionCard(
-                  title: '2. วิดีโอหลักสูตร',
+                  title: '2. วิดีโอรายวิชา',
                   children: [
                     ..._videoLessons.asMap().entries.map((entry) {
                       final index = entry.key;

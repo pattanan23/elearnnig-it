@@ -23,8 +23,8 @@ class CertificateData {
     final String fullName = '${json['firstName'] ?? ''} ${json['lastName'] ?? ''}'.trim();
     return CertificateData(
       userName: fullName,
-      subjectName: json['subjectName'] ?? 'ไม่ระบุหลักสูตรย่อย', 
-      courseName: json['courseName'] ?? 'ไม่ระบุหลักสูตรหลัก',
+      subjectName: json['subjectName'] ?? 'ไม่ระบุรายวิชาย่อย', 
+      courseName: json['courseName'] ?? 'ไม่ระบุรายวิชาหลัก',
       issueDate: json['issueDate'] ?? '', 
     );
   }
@@ -85,7 +85,7 @@ class _CertificatePageState extends State<CertificatePage> {
         });
       } else {
         setState(() {
-          _errorMessage = 'ไม่พบข้อมูลวุฒิบัตรสำหรับหลักสูตรนี้. (Status Code: ${response.statusCode})';
+          _errorMessage = 'ไม่พบข้อมูลวุฒิบัตรสำหรับรายวิชานี้. (Status Code: ${response.statusCode})';
           _isLoading = false;
         });
       }
@@ -183,13 +183,13 @@ class _CertificatePageState extends State<CertificatePage> {
 
                               // เนื้อหาการรับรอง
                               const Text(
-                                'ผ่านการฝึกอบรมหลักสูตร',
+                                'ผ่านการฝึกอบรมรายวิชา',
                                 style: TextStyle(fontSize: 20),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 10),
                               
-                              // ชื่อหลักสูตรหลัก
+                        
                               Text(
                                 _certData!.courseName,
                                 style: TextStyle(
@@ -201,7 +201,7 @@ class _CertificatePageState extends State<CertificatePage> {
                               ),
                               const SizedBox(height: 10),
 
-                              // ชื่อหลักสูตรย่อย
+                              
                               Text(
                                 '(${_certData!.subjectName})',
                                 style: TextStyle(fontSize: 18, color: primaryColor),

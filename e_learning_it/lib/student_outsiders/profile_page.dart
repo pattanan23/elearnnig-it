@@ -63,7 +63,7 @@ class UserCertificate {
     return UserCertificate(
       courseId: safeCourseId,
       courseCode: json['course_code']?.toString() ?? 'N/A',
-      courseName: json['course_name']?.toString() ?? 'ไม่ระบุชื่อหลักสูตร',
+      courseName: json['course_name']?.toString() ?? 'ไม่ระบุชื่อรายวิชา',
       subjectName: json['subject_name']?.toString() ?? 'ไม่ระบุชื่อวิชา',
       issueDate: json['issue_date']?.toString() ?? 'N/A',
     );

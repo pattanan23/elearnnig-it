@@ -75,7 +75,7 @@ class DrawerProcessorPage extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.upload_file),
-              title: const Text('อัปโหลดหลักสูตร'),
+              title: const Text('อัปโหลดรายวิชา'),
               iconColor: Colors.white,
               onTap: () {
                 Navigator.pop(context);
